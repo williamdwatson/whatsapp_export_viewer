@@ -40,7 +40,7 @@ enum MediaType {
     OTHER,
 }
 
-/// Represents a media entry
+/// Represents a media message
 #[derive(Clone, Serialize)]
 struct Media {
     /// Media type
@@ -83,9 +83,15 @@ struct WhatsAppChat {
 
 #[derive(Serialize)]
 struct ChatSummary {
+    /// Chat name
+    name: String,
+    /// When the first message was sent; this is only `None` if no messages were sent
     first_sent: Option<NaiveDateTime>,
+    /// When the last message was sent; this is only `None` if no messages were sent
     last_sent: Option<NaiveDateTime>,
+    /// The last message that was sent; this is only `None` if no messages were sent
     last_message: Option<Message>,
+    /// The total number of messages
     number_of_messages: usize,
 }
 
@@ -593,6 +599,7 @@ fn load_chats(
         }
         let combined = combine_chats(parsed);
         chat_summaries.push(ChatSummary {
+            name: k.clone(),
             first_sent: combined.messages.iter().map(|c| c.timestamp).min(),
             last_sent: combined.messages.iter().map(|c| c.timestamp).max(),
             last_message: combined.messages.last().cloned(),

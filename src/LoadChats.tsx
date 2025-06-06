@@ -9,35 +9,25 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getBasename } from "./utilities";
 import { invoke } from "@tauri-apps/api/core";
 import { Toast } from "primereact/toast";
+import { chat_files_t, chat_summary_t, message_t } from "./types";
 
 
-/**
- * Represents a chat to load
- */
-type chat_files_t = {
-    /**
-     * Unique chat ID
-     */
-    id: number,
-    /**
-     * Chat text file
-     */
-    chatFile: string,
-    /**
-     * Optional chat resource directory
-     */
-    chatDirectory: string | null,
-    /**
-     * Chat name, if any
-     */
-    chatName: string,
-}
+type returned_chat_summary_t = Omit<chat_summary_t, "first_sent" | "last_sent" | "last_message">
+    & {
+        first_sent: string | null,
+        last_sent: string | null,
+        last_message: null | (Omit<message_t, "timestamp"> & { timestamp: string })
+    };
 
 interface LoadChatsProps {
     /**
      * Reference for popup messages
      */
     toast: RefObject<Toast>,
+    /**
+     * Sets the chat summaries
+     */
+    setChatSummaries: (summaries: chat_summary_t[]) => void,
 }
 
 /**
@@ -164,7 +154,19 @@ export function LoadChats(props: LoadChatsProps) {
         setLoading(true);
         invoke("load_chats", { chats: selectedFiles })
             .then(res => {
-                console.log(res);
+                const resp = res as returned_chat_summary_t[];
+                props.setChatSummaries(resp.map(summary => {
+                    const first = summary.first_sent == null ? null : new Date(summary.first_sent);
+                    const last = summary.last_sent == null ? null : new Date(summary.last_sent);
+                    const message = summary.last_message == null ? null : { ...summary.last_message, timestamp: new Date(summary.last_message.timestamp) };
+                    return {
+                        name: summary.name,
+                        first_sent: first,
+                        last_sent: last,
+                        last_message: message,
+                        number_of_messages: summary.number_of_messages
+                    };
+                }))
             })
             .catch(err => props.toast.current?.show({ severity: "error", summary: "Error loading chats", detail: err }))
             .finally(() => setLoading(false));
