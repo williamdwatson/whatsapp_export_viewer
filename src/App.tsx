@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import "primereact/resources/themes/lara-light-cyan/theme.css";
+import "primereact/resources/themes/saga-green/theme.css";  // Or arya-green
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 

@@ -26,3 +26,31 @@ export function getMessageType(msg: message_content_t | null | undefined) {
     }
     return "system";
 }
+
+type image_dimensions_t = {
+    /**
+     * Image natural height
+     */
+    naturalHeight: number,
+    /**
+     * Image natural width
+     */
+    naturalWidth: number
+}
+
+/**
+ * Gets the dimensions of the given image.
+ * From https://stackoverflow.com/a/64268847/25985646
+ * @param src Image source
+ * @returns Image natural dimensions
+ */
+export const getImageDimesions = (src: string) => new Promise<image_dimensions_t>(resolve => {
+    const img = new Image();
+    img.onload = () => {
+        resolve({
+            naturalHeight: img.naturalHeight,
+            naturalWidth: img.naturalWidth,
+        });
+    }
+    img.src = src;
+});

@@ -65,6 +65,21 @@ export type message_t = {
 }
 
 /**
+ * `message_t` with system content
+ */
+export type system_message_t = Omit<message_t, "content"> & { content: system_content_t };
+
+/**
+ * `message_t` with text content
+ */
+export type text_message_t = Omit<message_t, "content"> & { content: text_content_t };
+
+/**
+ * `message_t` with media content
+ */
+export type media_message_t = Omit<message_t, "content"> & { content: media_content_t };
+
+/**
  * A summary of a WhatsApp chat
  */
 export type chat_summary_t = {

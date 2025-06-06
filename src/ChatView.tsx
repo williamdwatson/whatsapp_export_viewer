@@ -1,12 +1,22 @@
-import { ListBox } from "primereact/listbox"
-import { chat_summary_t, media_content_t, system_content_t, text_content_t } from "./types"
-import { getMessageType } from "./utilities"
+import { useRef, useState } from "react";
+import { VariableSizeList } from "react-window";
+import InfiniteLoader from "react-window-infinite-loader";
+import { ListBox } from "primereact/listbox";
+import { chat_summary_t, media_content_t, system_content_t, text_content_t } from "./types";
+import { getMessageType } from "./utilities";
+import Chat from "./Chat";
 
 interface ChatViewProps {
     summaries: chat_summary_t[],
 }
 
 export default function ChatView(props: ChatViewProps) {
+    const [selectedChat, setSelectedChat] = useState<chat_summary_t | null>(null);
+    const listRef = useRef<VariableSizeList>(null);
+
+    const changeSelectedChat = (s: chat_summary_t | null) => {
+        setSelectedChat(s);
+    }
 
     /**
      * Gets the appropriate text for the given media content
@@ -38,7 +48,7 @@ export default function ChatView(props: ChatViewProps) {
                 : message_type === "system" ? (summary.last_message!.content as system_content_t).System
                     : `sent a ${getMediaText(summary.last_message!.content as media_content_t)}`;
         return <div>
-            <b>{summary.name}</b>
+            <b style={{ display: "inline-block", width: "10vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{summary.name}</b>
             <span style={{ float: "right" }}>{summary.last_sent?.toLocaleDateString()}</span>
             <br />
             {summary.last_message == null ? null
@@ -52,7 +62,14 @@ export default function ChatView(props: ChatViewProps) {
 
     return (
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr 10fr" }}>
-            <ListBox options={props.summaries} optionLabel="name" itemTemplate={chatTemplate} listStyle={{ height: "96vh" }} />
+            <ListBox value={selectedChat} onChange={e => changeSelectedChat(e.value)} options={props.summaries} optionLabel="name" itemTemplate={chatTemplate} listStyle={{ height: "96vh" }} />
+            {selectedChat == null ? null : <div>
+                {/* <InfiniteLoader itemCount={selectedChat.number_of_messages}> */}
+                <VariableSizeList height={100} width={"80vw"} itemSize={(index) => 25} itemCount={selectedChat.number_of_messages} ref={listRef}>
+                    {({ index, style }) => <div style={style}>Row {index}</div>}
+                </VariableSizeList>
+                {/* </InfiniteLoader> */}
+            </div>}
         </div>
     )
 }
