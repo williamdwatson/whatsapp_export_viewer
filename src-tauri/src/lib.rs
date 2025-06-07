@@ -1,8 +1,9 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    fs::File,
+    fs::{self, File},
     io::{BufRead, BufReader},
-    sync::Mutex,
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
 use chrono::NaiveDateTime;
@@ -72,6 +73,7 @@ struct Message {
 }
 
 /// A WhatsApp chat parsed from an export file
+#[derive(Clone, Serialize)]
 struct WhatsAppChat {
     /// All message of the chat in order
     messages: Vec<Message>,
@@ -81,6 +83,7 @@ struct WhatsAppChat {
     name: String,
 }
 
+/// Summary of a WhatsApp chat
 #[derive(Serialize)]
 struct ChatSummary {
     /// Chat name
@@ -135,7 +138,7 @@ struct ChatToLoad {
 /// Maintains the app state
 struct AppState {
     /// Mapping of chat names to chat objects
-    chats: Mutex<Vec<WhatsAppChat>>,
+    chats: Mutex<Vec<Arc<WhatsAppChat>>>,
 }
 
 impl WhatsAppChat {
@@ -243,6 +246,20 @@ impl WhatsAppChat {
     }
 }
 
+/// Searches `directory` for a file named `path`; if one is found, the full string path
+fn full_file_path(
+    path: &str,
+    directory: &Option<String>,
+    directory_files: &HashSet<String>,
+) -> Option<String> {
+    match directory {
+        Some(dir) if directory_files.contains(path) => {
+            Some(Path::new(dir).join(path).to_string_lossy().into_owned())
+        }
+        _ => None,
+    }
+}
+
 /// Parses a WhatsApp chat export
 /// # Parameters
 /// * `path` - Path to the chat file
@@ -257,6 +274,30 @@ fn parse_whatsapp_export(
     let mut version = ExportVersion::NEW;
     let mut messages: Vec<Message> = Vec::new();
     let mut senders: HashSet<String> = HashSet::with_capacity(2);
+    let mut directory_files = HashSet::new();
+    match directory {
+        Some(dir) => match fs::read_dir(dir) {
+            Ok(paths) => {
+                paths.for_each(|p| match p {
+                    Ok(dir_entry) => {
+                        let dir_entry_path = dir_entry.path();
+                        if dir_entry_path.is_file() {
+                            match dir_entry_path.file_name() {
+                                Some(file_name) => {
+                                    directory_files
+                                        .insert(file_name.to_string_lossy().into_owned());
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                });
+            }
+            _ => {}
+        },
+        _ => {}
+    }
     for line in reader.lines() {
         match line {
             Ok(l) => {
@@ -321,7 +362,11 @@ fn parse_whatsapp_export(
                                         sender: Some(sender),
                                         content: MessageContent::Media(Media {
                                             media_type,
-                                            path: Some(file_name.to_string()),
+                                            path: full_file_path(
+                                                file_name,
+                                                directory,
+                                                &directory_files,
+                                            ),
                                         }),
                                     });
                                 } else {
@@ -400,7 +445,11 @@ fn parse_whatsapp_export(
                                             sender: Some(sender),
                                             content: MessageContent::Media(Media {
                                                 media_type,
-                                                path: Some(file_name.to_string()),
+                                                path: full_file_path(
+                                                    file_name,
+                                                    directory,
+                                                    &directory_files,
+                                                ),
                                             }),
                                         });
                                     } else {
@@ -575,6 +624,23 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
     };
 }
 
+#[tauri::command]
+fn get_chat(chat: String, state: State<'_, AppState>) -> Result<Arc<WhatsAppChat>, String> {
+    let locked_chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+
+    match locked_chats.iter().find(|c| c.name == chat) {
+        Some(c) => {
+            return Ok(c.clone());
+        }
+        None => {
+            return Err("Failed to find chat".to_owned());
+        }
+    }
+}
+
 /// Loads chats from the frontend
 #[tauri::command]
 fn load_chats(
@@ -605,7 +671,7 @@ fn load_chats(
             last_message: combined.messages.last().cloned(),
             number_of_messages: combined.messages.len(),
         });
-        chats.push(combined);
+        chats.push(Arc::new(combined));
     }
     let mut to_change = state.chats.lock().or(Err("Failed to get lock on state"))?;
     *to_change = chats;
@@ -620,7 +686,7 @@ pub fn run() {
         .manage(AppState {
             chats: Vec::new().into(),
         })
-        .invoke_handler(tauri::generate_handler![load_chats])
+        .invoke_handler(tauri::generate_handler![load_chats, get_chat])
         .run(tauri::generate_context!())
         .expect("Error while running application");
 }

@@ -19,6 +19,21 @@ export default function AutoLink({ text }: { text: string }) {
                         <a href={url.startsWith("http") ? url : `http://${url}`} target="_blank" key={`link-${url}`}>{url}</a>
                     );
                 }
+                if (word.startsWith("*") && word.endsWith("*")) {
+                    return <b>{word.substring(1, word.length - 1)}</b>
+                }
+                else if (word.startsWith("_") && word.endsWith("_")) {
+                    return <i>{word.substring(1, word.length - 1)}</i>
+                }
+                else if (word.startsWith("~") && word.endsWith("~")) {
+                    return <s>{word.substring(1, word.length - 1)}</s>
+                }
+                else if (word.startsWith("```") && word.endsWith("```")) {
+                    return <code>{word.substring(3, word.length - 3)}</code>
+                }
+                else if (word.startsWith("`") && word.endsWith("`")) {
+                    return <code>{word.substring(3, word.length - 3)}</code>
+                }
                 return word;
             })}
         </>

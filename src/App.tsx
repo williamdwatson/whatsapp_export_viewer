@@ -19,7 +19,7 @@ function App() {
             <Toast ref={toast} />
             {chatSummaries.length === 0 ?
                 <LoadChats toast={toast} setChatSummaries={setChatSummaries} />
-                : <ChatView summaries={chatSummaries} />}
+                : <ChatView summaries={chatSummaries} toast={toast} />}
         </>
     );
 }

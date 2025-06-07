@@ -9,13 +9,22 @@ import { Button } from "primereact/button";
 import { openPath } from "@tauri-apps/plugin-opener";
 import AutoLink from "./AutoLink";
 
+/**
+ * Gets the formatted title for the `message`
+ * @param message Message for which to get the title
+ * @returns The title element for the `message`
+ */
+function getTitle(message: message_t) {
+    return <>{message.sender}<span style={{ fontWeight: "normal", fontSize: "smaller", float: "right", marginTop: "3px", marginLeft: "5px" }}>{message.timestamp.toLocaleString()}</span></>
+}
+
 interface SystemChatProps {
     message: system_message_t
 }
 function SystemChat(props: SystemChatProps) {
     return <div>
-        <Card style={{ width: "45vw", display: "inline-block" }}>
-            <p style={{ margin: 0 }}>{props.message.content.System}</p>
+        <Card style={{ width: "80vw", display: "inline-block", textAlign: "center" }}>
+            <i style={{ margin: 0 }}>{props.message.content.System}</i>
         </Card>
     </div>
 }
@@ -26,21 +35,22 @@ interface TextChatProps {
 function TextChat(props: TextChatProps) {
     return <div>
         <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} />
-        <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block" }} title={props.message.sender}>
+        <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block" }} title={getTitle(props.message)}>
             <p style={{ margin: 0 }}><AutoLink text={props.message.content.Text} /></p>
         </Card>
     </div>
 }
 
 interface MediaChatProps {
-    message: media_message_t
+    message: media_message_t,
+    onContentChange: () => void,
 }
 function MediaChat(props: MediaChatProps) {
     const [loadingFile, setLoadingFile] = useState(false);
     let element: ReactNode;
     if (props.message.content.Media.media_type === "PHOTO") {
         element = props.message.content.Media.path == null ? <i>Photo unavailable</i>
-            : <Image imageStyle={{ maxHeight: "20vh", maxWidth: "45vh" }} src={convertFileSrc(props.message.content.Media.path)} preview />
+            : <Image onLoad={props.onContentChange} imageStyle={{ maxHeight: "20vh", maxWidth: "45vh" }} src={convertFileSrc(props.message.content.Media.path)} preview />
     }
     else if (props.message.content.Media.media_type === "VIDEO") {
         element = props.message.content.Media.path == null ? <i>Video unavailable</i> : <video style={{ maxHeight: "20vh", maxWidth: "45vh" }} controls src={convertFileSrc(props.message.content.Media.path)} />
@@ -62,7 +72,7 @@ function MediaChat(props: MediaChatProps) {
     }
     return <div>
         <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} />
-        <Card style={{ width: undefined, display: "inline-block" }} title={props.message.sender}>
+        <Card style={{ width: undefined, display: "inline-block" }} title={getTitle(props.message)}>
             {element}
         </Card>
     </div>
@@ -70,13 +80,14 @@ function MediaChat(props: MediaChatProps) {
 
 interface ChatProps {
     message: message_t,
+    onContentChange: () => void
 }
 export default function Chat(props: ChatProps) {
     if (getMessageType(props.message.content) === "text") {
         return <TextChat message={props.message as text_message_t} />
     }
     else if (getMessageType(props.message.content) === "media") {
-        return <MediaChat message={props.message as media_message_t} />
+        return <MediaChat onContentChange={props.onContentChange} message={props.message as media_message_t} />
     }
     else {
         return <SystemChat message={props.message as system_message_t} />
