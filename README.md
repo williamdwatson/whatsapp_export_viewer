@@ -1,7 +1,3 @@
-# Tauri + React + Typescript
+# WhatsApp Export Viewer
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+This standalone app is built for viewing WhatsApp exports (not backups). This app is not associated with WhatsApp in any way.

@@ -74,6 +74,7 @@ function MediaChat(props: MediaChatProps) {
         <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} />
         <Card style={{ width: undefined, display: "inline-block" }} title={getTitle(props.message)}>
             {element}
+            {props.message.content.Media.caption == null ? null : <p>{<AutoLink text={props.message.content.Media.caption} />}</p>}
         </Card>
     </div>
 }

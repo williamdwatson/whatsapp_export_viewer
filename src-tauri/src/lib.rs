@@ -48,6 +48,8 @@ struct Media {
     media_type: MediaType,
     /// Media path, if available
     path: Option<String>,
+    /// Caption, if any
+    caption: Option<String>,
 }
 
 /// The content of a WhatsApp message
@@ -367,6 +369,7 @@ fn parse_whatsapp_export(
                                                 directory,
                                                 &directory_files,
                                             ),
+                                            caption: None,
                                         }),
                                     });
                                 } else {
@@ -418,6 +421,7 @@ fn parse_whatsapp_export(
                                             content: MessageContent::Media(Media {
                                                 media_type: MediaType::OTHER,
                                                 path: None,
+                                                caption: None,
                                             }),
                                         })
                                     } else if l.ends_with("(file attached)") {
@@ -450,6 +454,7 @@ fn parse_whatsapp_export(
                                                     directory,
                                                     &directory_files,
                                                 ),
+                                                caption: None,
                                             }),
                                         });
                                     } else {
@@ -507,6 +512,23 @@ fn parse_whatsapp_export(
                                         last_msg_content.to_owned() + "\n" + &l,
                                     ),
                                 };
+                            } else if let MessageContent::Media(last_msg_content) =
+                                &last_msg.content
+                            {
+                                messages[last_idx] = Message {
+                                    timestamp: last_msg.timestamp,
+                                    sender: last_msg.sender.clone(),
+                                    content: MessageContent::Media(Media {
+                                        media_type: last_msg_content.media_type,
+                                        path: last_msg_content.path.clone(),
+                                        caption: match &last_msg_content.caption {
+                                            Some(old_caption) => {
+                                                Some(old_caption.to_owned() + "\n" + &l)
+                                            }
+                                            None => Some(l),
+                                        },
+                                    }),
+                                }
                             }
                         }
                     }

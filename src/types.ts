@@ -24,8 +24,18 @@ export type chat_files_t = {
  * Represents a media message
  */
 export type media_t = {
+    /**
+     * Media type
+     */
     media_type: "PHOTO" | "VIDEO" | "AUDIO" | "OTHER",
-    path: string | null
+    /**
+     * Media absolute path, if available
+     */
+    path: string | null,
+    /**
+     * Media caption, if any
+     */
+    caption: string | null
 }
 
 /**
