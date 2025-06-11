@@ -1,7 +1,6 @@
 import { Dialog } from "primereact/dialog";
 import { message_t } from "./types";
 import { Button } from "primereact/button";
-import { ScrollPanel } from "primereact/scrollpanel";
 import Chat from "./Chat";
 import { Divider } from "primereact/divider";
 
@@ -40,12 +39,11 @@ export default function StarredChats(props: StarredChatProps) {
      * @param idx Index to scroll to
      */
     const scrollToIdx = (idx: number) => {
-        console.log(idx);
         props.setShow(false);
         props.jumpToMessage(idx);
     }
 
-    return <Dialog visible={props.show} onHide={() => props.setShow(false)} dismissableMask>
+    return <Dialog header="Starred chats" visible={props.show} onHide={() => props.setShow(false)} dismissableMask>
         <div style={{ textAlign: "center" }}>
             <Button label="Jump to top" icon="pi pi-arrow-up" style={{ marginRight: "5px" }} onClick={() => scrollToIdx(0)} />
             <Button label="Jump to bottom" icon="pi pi-arrow-down" onClick={() => scrollToIdx(props.totalNumberMessages - 1)} />
@@ -54,7 +52,7 @@ export default function StarredChats(props: StarredChatProps) {
             :
             props.starredMessages.map(m =>
                 <div style={{ marginTop: "10px", cursor: "pointer" }} onClick={() => scrollToIdx(m.idx)}>
-                    <Chat message={m} />
+                    <Chat message={m} systemMessageWidth={"45vw"} />
                     <Divider />
                 </div>)
         }

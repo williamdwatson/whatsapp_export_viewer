@@ -317,6 +317,37 @@ impl WhatsAppChat {
     }
 }
 
+/// Searches the messages in `chat` for the given string
+/// # Args
+/// * `chat` - Name of the chat to search
+/// * `search` - String to search
+#[tauri::command]
+fn search(chat: String, search: String, state: State<'_, AppState>) -> Result<Vec<usize>, String> {
+    let locked_chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    let lower_search = search.to_lowercase();
+    for c in locked_chats.iter() {
+        if c.name == chat {
+            return Ok(c
+                .messages
+                .iter()
+                .filter(|m| match &m.content {
+                    MessageContent::Text(text) => text.to_lowercase().contains(&lower_search),
+                    MessageContent::Media(media) => match &media.caption {
+                        Some(caption) => caption.to_lowercase().contains(&lower_search),
+                        _ => false,
+                    },
+                    MessageContent::System(system) => system.to_lowercase().contains(&lower_search),
+                })
+                .map(|m| m.idx)
+                .collect());
+        }
+    }
+    return Err("Failed to find chat".to_owned());
+}
+
 /// Stars or unstars the specified message
 /// # Args
 /// * `chat` - Name of the chat of interest
@@ -936,6 +967,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_chats,
             get_chat,
+            search,
             star_message,
             get_starred
         ])

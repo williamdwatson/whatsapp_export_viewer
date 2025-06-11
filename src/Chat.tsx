@@ -2,12 +2,13 @@ import { Avatar } from "primereact/avatar";
 import { media_message_t, message_t, system_message_t, text_message_t } from "./types";
 import { getBasename, getMessageType } from "./utilities";
 import { Card } from "primereact/card";
-import { ReactNode, useState } from "react";
+import { CSSProperties, ReactNode, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Image } from "primereact/image";
 import { Button } from "primereact/button";
 import { openPath } from "@tauri-apps/plugin-opener";
 import AutoLink from "./AutoLink";
+import HighlightText from "./HighlightText";
 
 /**
  * Gets the formatted title for the `message`
@@ -30,15 +31,28 @@ interface SystemChatProps {
     /**
      * System message to display
      */
-    message: system_message_t
+    message: system_message_t,
+    /**
+     * Text to highlight, if any
+     */
+    highlightText?: string,
+    /**
+     * Width of the system chat message
+     */
+    width: CSSProperties["width"]
 }
 /**
  * Displays a system message (such as adding a participant, renaming the chat, etc.)
  */
 function SystemChat(props: SystemChatProps) {
     return <div>
-        <Card style={{ width: "80vw", display: "inline-block", textAlign: "center" }}>
-            <i style={{ margin: 0 }}>{props.message.content.System}</i>
+        <Card style={{ width: props.width, display: "inline-block", textAlign: "center" }}>
+            <i style={{ margin: 0 }}>
+                {props.highlightText == null ?
+                    props.message.content.System
+                    : <HighlightText highlight={props.highlightText}>{props.message.content.System}</HighlightText>
+                }
+            </i>
         </Card>
     </div>
 }
@@ -53,15 +67,28 @@ interface TextChatProps {
      * @param message Message to (un)star
      */
     starMessage?: (message: message_t) => void,
+    /**
+     * Text to highlight, if any
+     */
+    highlightText?: string,
+    /**
+     * Whether to show the sender avatar
+     */
+    showAvatar: boolean
 }
 /**
  * Displays a standard text message
  */
 function TextChat(props: TextChatProps) {
     return <div>
-        <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} />
+        {props.showAvatar ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
         <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block" }} title={getTitle(props.message, props.starMessage)}>
-            <p style={{ margin: 0 }}><AutoLink text={props.message.content.Text} /></p>
+            <p style={{ margin: 0 }}>
+                {props.highlightText == null ?
+                    <AutoLink text={props.message.content.Text} />
+                    : <HighlightText highlight={props.highlightText}>{props.message.content.Text}</HighlightText>
+                }
+            </p>
         </Card>
     </div>
 }
@@ -80,6 +107,14 @@ interface MediaChatProps {
      * @param message Message to (un)star
      */
     starMessage?: (message: message_t) => void,
+    /**
+     * Text to highlight, if any
+     */
+    highlightText?: string,
+    /**
+     * Whether to show the sender avatar
+     */
+    showAvatar: boolean
 }
 /**
  * Displays a media (photo, video, audio, or file) message
@@ -110,10 +145,17 @@ function MediaChat(props: MediaChatProps) {
         }
     }
     return <div>
-        <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} />
+        {props.showAvatar ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
         <Card style={{ width: undefined, display: "inline-block" }} title={getTitle(props.message, props.starMessage)}>
             {element}
-            {props.message.content.Media.caption == null ? null : <p style={{ margin: 0 }}>{<AutoLink text={props.message.content.Media.caption} />}</p>}
+            {props.message.content.Media.caption == null ? null :
+                <p style={{ margin: 0 }}>
+                    {props.highlightText == null ?
+                        <AutoLink text={props.message.content.Media.caption} />
+                        : <HighlightText highlight={props.highlightText}>{props.message.content.Media.caption}</HighlightText>
+                    }
+                </p>
+            }
         </Card>
     </div>
 }
@@ -131,16 +173,30 @@ interface ChatProps {
      * Callback to (un)star a message
      * @param message Message to (un)star
      */
-    starMessage?: (message: message_t) => void
+    starMessage?: (message: message_t) => void,
+    /**
+     * Text to highlight, if any
+     */
+    highlightText?: string,
+    /**
+     * Whether to show the sender avatar
+     * @default true
+     */
+    showAvatar?: boolean,
+    /**
+     * Width of a system message
+     */
+    systemMessageWidth: CSSProperties["width"]
 }
 export default function Chat(props: ChatProps) {
+    const showAvatar = props.showAvatar ?? true;
     if (getMessageType(props.message.content) === "text") {
-        return <TextChat message={props.message as text_message_t} starMessage={props.starMessage} />
+        return <TextChat message={props.message as text_message_t} starMessage={props.starMessage} showAvatar={showAvatar} highlightText={props.highlightText} />
     }
     else if (getMessageType(props.message.content) === "media") {
-        return <MediaChat onContentChange={props.onContentChange} message={props.message as media_message_t} starMessage={props.starMessage} />
+        return <MediaChat onContentChange={props.onContentChange} message={props.message as media_message_t} starMessage={props.starMessage} showAvatar={showAvatar} highlightText={props.highlightText} />
     }
     else {
-        return <SystemChat message={props.message as system_message_t} />
+        return <SystemChat message={props.message as system_message_t} highlightText={props.highlightText} width={props.systemMessageWidth} />
     }
 }

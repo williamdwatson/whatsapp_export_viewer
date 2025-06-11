@@ -126,3 +126,8 @@ export type chat_summary_t = {
      */
     starred: message_t[]
 }
+
+/**
+ * A message as returned from the "backend"
+ */
+export type returned_chat_t = Omit<message_t, "timestamp"> & { timestamp: string };

@@ -1,10 +1,6 @@
 import { RefObject, useRef, useState } from "react";
-import { ListOnItemsRenderedProps, VariableSizeList } from "react-window";
-import { IconField } from "primereact/iconfield";
-import { InputIcon } from "primereact/inputicon";
-import { InputText } from "primereact/inputtext";
 import { ListBox } from "primereact/listbox";
-import { chat_summary_t, media_content_t, message_t, system_content_t, text_content_t } from "./types";
+import { chat_summary_t, media_content_t, message_t, returned_chat_t, system_content_t, text_content_t } from "./types";
 import { getMessageType } from "./utilities";
 import Chat from "./Chat";
 import { invoke } from "@tauri-apps/api/core";
@@ -13,6 +9,7 @@ import { List, AutoSizer, CellMeasurer, CellMeasurerCache } from "react-virtuali
 import { Toolbar } from "primereact/toolbar";
 import { Button } from "primereact/button";
 import StarredChats from "./StarredChats";
+import Search from "./Search";
 
 
 interface ChatViewProps {
@@ -26,11 +23,10 @@ interface ChatViewProps {
     toast: RefObject<Toast>
 }
 
-type returned_chat_t = Omit<message_t, "timestamp"> & { timestamp: string };
-
 export default function ChatView(props: ChatViewProps) {
     const [selectedChat, setSelectedChat] = useState<chat_summary_t | null>(null);
     const [loadedMessages, setLoadedMessages] = useState<message_t[] | null>(null);
+    const [showSearch, setShowSearch] = useState(false);
     const [showStarred, setShowStarred] = useState(false);
     const [starredMessages, setStarredMessages] = useState<message_t[]>([]);
     const listRef = useRef<List>(null);
@@ -148,19 +144,17 @@ export default function ChatView(props: ChatViewProps) {
         }
     }
 
-    const end = <form>
-        <IconField iconPosition="left" style={{ display: "inline-block" }}>
-            <InputIcon className="pi pi-search"> </InputIcon>
-            <InputText placeholder="Search" />
-        </IconField>
+    const end = <div>
+        <Button type="button" icon="pi pi-search" rounded onClick={() => setShowSearch(true)} />
         <Button type="button" icon="pi pi-star" rounded style={{ marginLeft: "10px" }} onClick={loadStarred} />
         <Button type="button" icon="pi pi-filter" rounded style={{ marginLeft: "10px" }} />
         <Button type="button" icon="pi pi-cog" rounded style={{ marginLeft: "10px", marginRight: "10px" }} />
         <Button type="button" icon="pi pi-chart-bar" rounded />
-    </form>
+    </div>
 
     return (
         <>
+            <Search show={showSearch} setShow={setShowSearch} chat={selectedChat?.name} toast={props.toast} messages={loadedMessages ?? []} jumpToMessage={(idx) => listRef.current?.scrollToRow(idx)} />
             <StarredChats show={showStarred} setShow={setShowStarred} starredMessages={starredMessages} totalNumberMessages={(loadedMessages ?? []).length} jumpToMessage={(idx) => listRef.current?.scrollToRow(idx)} />
             <div style={{ display: "grid", gridTemplateColumns: "1.5fr 10fr" }}>
                 <ListBox value={selectedChat} onChange={e => changeSelectedChat(e.value)} options={props.summaries} optionLabel="name" itemTemplate={chatTemplate} listStyle={{ height: "97vh" }} />
@@ -186,7 +180,7 @@ export default function ChatView(props: ChatViewProps) {
                                             rowIndex={index}
                                         >
                                             {({ measure }) => <div style={{ ...style, paddingTop: "5px", paddingBottom: "5px" }}>
-                                                <Chat message={loadedMessages[index]} onContentChange={measure} starMessage={starMessage} />
+                                                <Chat message={loadedMessages[index]} onContentChange={measure} starMessage={starMessage} systemMessageWidth={"80vw"} />
                                             </div>}
                                         </CellMeasurer>
                                     )}
