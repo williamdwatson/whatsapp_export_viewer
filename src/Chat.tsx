@@ -39,7 +39,12 @@ interface SystemChatProps {
     /**
      * Width of the system chat message
      */
-    width: CSSProperties["width"]
+    width: CSSProperties["width"],
+    /**
+     * Whether the message is from you
+     * @default false
+     */
+    fromYou?: boolean
 }
 /**
  * Displays a system message (such as adding a participant, renaming the chat, etc.)
@@ -74,14 +79,19 @@ interface TextChatProps {
     /**
      * Whether to show the sender avatar
      */
-    showAvatar: boolean
+    showAvatar: boolean,
+    /**
+     * Whether the message is from you (puts the avatar on the right side and changes the background color)
+     * @default false
+     */
+    fromYou?: boolean
 }
 /**
  * Displays a standard text message
  */
 function TextChat(props: TextChatProps) {
-    return <div>
-        {props.showAvatar ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
+    return <div style={{ float: props.fromYou ? "right" : undefined }}>
+        {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
         <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block" }} title={getTitle(props.message, props.starMessage)}>
             <p style={{ margin: 0 }}>
                 {props.highlightText == null ?
@@ -90,6 +100,7 @@ function TextChat(props: TextChatProps) {
                 }
             </p>
         </Card>
+        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px" }} /> : null}
     </div>
 }
 
@@ -114,7 +125,12 @@ interface MediaChatProps {
     /**
      * Whether to show the sender avatar
      */
-    showAvatar: boolean
+    showAvatar: boolean,
+    /**
+     * Whether the message is from you (puts the avatar on the right side and changes the background color)
+     * @default false
+     */
+    fromYou?: boolean
 }
 /**
  * Displays a media (photo, video, audio, or file) message
@@ -144,8 +160,8 @@ function MediaChat(props: MediaChatProps) {
             element = <i>File unavailable</i>
         }
     }
-    return <div>
-        {props.showAvatar ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
+    return <div style={{ float: props.fromYou ? "right" : undefined }}>
+        {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
         <Card style={{ width: undefined, display: "inline-block" }} title={getTitle(props.message, props.starMessage)}>
             {element}
             {props.message.content.Media.caption == null ? null :
@@ -157,6 +173,7 @@ function MediaChat(props: MediaChatProps) {
                 </p>
             }
         </Card>
+        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px" }} /> : null}
     </div>
 }
 
@@ -186,17 +203,22 @@ interface ChatProps {
     /**
      * Width of a system message
      */
-    systemMessageWidth: CSSProperties["width"]
+    systemMessageWidth: CSSProperties["width"],
+    /**
+     * Whether the message is from you (puts the avatar on the right side and changes the background color)
+     * @default false
+     */
+    fromYou?: boolean
 }
 export default function Chat(props: ChatProps) {
     const showAvatar = props.showAvatar ?? true;
     if (getMessageType(props.message.content) === "text") {
-        return <TextChat message={props.message as text_message_t} starMessage={props.starMessage} showAvatar={showAvatar} highlightText={props.highlightText} />
+        return <TextChat message={props.message as text_message_t} starMessage={props.starMessage} showAvatar={showAvatar} fromYou={props.fromYou} highlightText={props.highlightText} />
     }
     else if (getMessageType(props.message.content) === "media") {
-        return <MediaChat onContentChange={props.onContentChange} message={props.message as media_message_t} starMessage={props.starMessage} showAvatar={showAvatar} highlightText={props.highlightText} />
+        return <MediaChat onContentChange={props.onContentChange} message={props.message as media_message_t} starMessage={props.starMessage} showAvatar={showAvatar} fromYou={props.fromYou} highlightText={props.highlightText} />
     }
     else {
-        return <SystemChat message={props.message as system_message_t} highlightText={props.highlightText} width={props.systemMessageWidth} />
+        return <SystemChat message={props.message as system_message_t} fromYou={props.fromYou} highlightText={props.highlightText} width={props.systemMessageWidth} />
     }
 }

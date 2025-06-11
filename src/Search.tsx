@@ -39,6 +39,9 @@ interface SearchProps {
 
 }
 
+/**
+ * Dialog for searching
+ */
 export default function Search(props: SearchProps) {
     const [search, setSearch] = useState("");
     const [foundIdxes, setFoundIdxes] = useState<number[] | null>(null);

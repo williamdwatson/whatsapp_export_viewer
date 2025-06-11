@@ -131,3 +131,13 @@ export type chat_summary_t = {
  * A message as returned from the "backend"
  */
 export type returned_chat_t = Omit<message_t, "timestamp"> & { timestamp: string };
+
+/**
+ * Program settings
+ */
+export type settings_t = {
+    /**
+     * Who "you" are (for right-aligned messages)
+     */
+    you: string | null
+}
