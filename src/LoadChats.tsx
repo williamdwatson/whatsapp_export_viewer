@@ -1,4 +1,4 @@
-import { RefObject, useState } from "react";
+import { FormEvent, RefObject, useState } from "react";
 import { Button } from "primereact/button";
 import { Column } from "primereact/column";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
@@ -88,7 +88,8 @@ export function LoadChats(props: LoadChatsProps) {
     /**
      * Adds a new chat
      */
-    const addChat = () => {
+    const addChat = (e: FormEvent) => {
+        e.preventDefault();
         if (selectedFilePath.trim() !== "" && selectedChatName.trim() !== "") {
             const new_chats = [...selectedFiles];
             new_chats.push({
@@ -105,7 +106,8 @@ export function LoadChats(props: LoadChatsProps) {
     /**
      * Actually edits the chat
      */
-    const doEditChat = () => {
+    const doEditChat = (e: FormEvent) => {
+        e.preventDefault();
         if (editingChat != null && selectedFilePath.trim() !== "" && selectedChatName !== "") {
             const new_chats: typeof selectedFiles = [];
             for (const c of selectedFiles) {
@@ -143,7 +145,6 @@ export function LoadChats(props: LoadChatsProps) {
      * @param row Row to delete
      */
     const deleteChat = (row: chat_files_t) => {
-        console.log(row);
         setSelectedFiles(prev => prev.filter((c) => c !== row));
     }
 
@@ -164,7 +165,8 @@ export function LoadChats(props: LoadChatsProps) {
                         first_sent: first,
                         last_sent: last,
                         last_message: message,
-                        number_of_messages: summary.number_of_messages
+                        number_of_messages: summary.number_of_messages,
+                        starred: summary.starred,
                     };
                 }))
             })
@@ -225,7 +227,7 @@ export function LoadChats(props: LoadChatsProps) {
         <>
             <ConfirmDialog />
             <Dialog header={`${editingChat == null ? "Choose" : "Edit"} chat`} visible={showChooseChat} onHide={cancelChooseChat} dismissableMask>
-                <div>
+                <form onSubmit={editingChat == null ? addChat : doEditChat}>
                     <div style={{ display: "flex", alignItems: "center" }}>
                         <Button label="Choose chat" icon="pi pi-file" onClick={chooseChat} />
                         <span style={{ marginLeft: "10px" }}>{getBasename(selectedFilePath)}</span>
@@ -240,12 +242,12 @@ export function LoadChats(props: LoadChatsProps) {
                     </div>
                     <div style={{ textAlign: "center", marginTop: "15px" }}>
                         {editingChat == null ?
-                            <Button label="Add chat" icon="pi pi-plus" severity="success" disabled={selectedFilePath.trim() === "" || selectedChatName.trim() === ""} onClick={addChat} />
-                            : <Button label="Edit chat" icon="pi pi-save" severity="success" disabled={selectedFilePath.trim() === "" || selectedChatName.trim() === ""} onClick={doEditChat} />
+                            <Button type="submit" label="Add chat" icon="pi pi-plus" severity="success" disabled={selectedFilePath.trim() === "" || selectedChatName.trim() === ""} />
+                            : <Button type="submit" label="Edit chat" icon="pi pi-save" severity="success" disabled={selectedFilePath.trim() === "" || selectedChatName.trim() === ""} />
                         }
-                        <Button label="Cancel" icon="pi pi-times" severity="warning" style={{ marginLeft: "5px" }} onClick={cancelChooseChat} />
+                        <Button type="reset" label="Cancel" icon="pi pi-times" severity="warning" style={{ marginLeft: "5px" }} onClick={cancelChooseChat} />
                     </div>
-                </div>
+                </form>
             </Dialog>
             <div style={{ display: "grid", height: "95vh", overflow: "hidden", justifyContent: "center", alignItems: "center" }}>
                 <div>

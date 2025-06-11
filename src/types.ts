@@ -61,6 +61,10 @@ export type message_content_t = text_content_t | system_content_t | media_conten
  */
 export type message_t = {
     /**
+     * Index of the message in its chat
+     */
+    idx: number,
+    /**
      * Time of the message
      */
     timestamp: Date,
@@ -71,7 +75,11 @@ export type message_t = {
     /**
      * Message content
      */
-    content: message_content_t
+    content: message_content_t,
+    /**
+     * Whether the chat has been starred
+     */
+    starred: boolean
 }
 
 /**
@@ -113,4 +121,8 @@ export type chat_summary_t = {
      * The total number of messages in the chat
      */
     number_of_messages: number,
+    /**
+     * Starred messages
+     */
+    starred: message_t[]
 }

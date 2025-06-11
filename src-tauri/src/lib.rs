@@ -3,12 +3,18 @@ use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
     path::Path,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering::Relaxed},
+        Arc, Mutex,
+    },
 };
 
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+/// Number of identical messages required to align
+const NUMBER_TO_ALIGN: usize = 5;
 
 /// The export version of a WhatsApp chat
 enum ExportVersion {
@@ -29,7 +35,7 @@ const VIDEO_TYPES: [&'static str; 7] = ["mp4", "avi", "mov", "wmv", "mkv", "webm
 const AUDIO_TYPES: [&'static str; 5] = ["opus", "mp3", "aac", "ogg", "wav"];
 
 /// The type of the media
-#[derive(Copy, Clone, Serialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize)]
 enum MediaType {
     /// A photo
     PHOTO,
@@ -52,8 +58,28 @@ struct Media {
     caption: Option<String>,
 }
 
+impl PartialEq for Media {
+    /// Checks if two media messages are the same. This is true if
+    /// * The `media_type`s are the same
+    /// * If both have captions, the captions are the same
+    ///
+    /// `path` is not checked, since those may belong to different directories.
+    fn eq(&self, other: &Self) -> bool {
+        if self.media_type != other.media_type {
+            return false;
+        }
+        if self.caption.is_some() && other.caption.is_some() {
+            if self.caption != other.caption {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+impl Eq for Media {}
+
 /// The content of a WhatsApp message
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 enum MessageContent {
     /// A standard text message
     Text(String),
@@ -63,8 +89,17 @@ enum MessageContent {
     System(String),
 }
 
+impl MessageContent {
+    fn is_media(&self) -> bool {
+        match self {
+            MessageContent::Media(_) => true,
+            _ => false,
+        }
+    }
+}
+
 /// A single WhatsApp message
-#[derive(Clone, Serialize)]
+#[derive(Serialize)]
 struct Message {
     /// When the message was sent
     timestamp: NaiveDateTime,
@@ -72,7 +107,39 @@ struct Message {
     sender: Option<String>,
     /// What the message is about
     content: MessageContent,
+    /// Whether the message has been starred
+    starred: AtomicBool,
+    /// Index of the message in its chat, if known
+    idx: usize,
 }
+
+impl Clone for Message {
+    fn clone(&self) -> Message {
+        return Message {
+            timestamp: self.timestamp.clone(),
+            sender: self.sender.clone(),
+            content: self.content.clone(),
+            starred: AtomicBool::new(self.starred.load(Relaxed)),
+            idx: self.idx,
+        };
+    }
+}
+
+impl PartialEq for Message {
+    /// Checks if two `Messages` are the same. This is true if
+    /// * The senders are the same
+    /// * The content is the same (see `eq` on `Media` for details)
+    /// * The timestamps are within 12 hours of each other
+    fn eq(&self, other: &Message) -> bool {
+        let min = self.timestamp.min(other.timestamp);
+        let max = self.timestamp.max(other.timestamp);
+        if max > min + Duration::hours(12) {
+            return false;
+        }
+        self.sender == other.sender && self.content == other.content
+    }
+}
+impl Eq for Message {}
 
 /// A WhatsApp chat parsed from an export file
 #[derive(Clone, Serialize)]
@@ -98,6 +165,8 @@ struct ChatSummary {
     last_message: Option<Message>,
     /// The total number of messages
     number_of_messages: usize,
+    /// Starred messages
+    starred: Vec<Message>,
 }
 
 /// Count of each message type
@@ -248,6 +317,50 @@ impl WhatsAppChat {
     }
 }
 
+/// Stars or unstars the specified message
+/// # Args
+/// * `chat` - Name of the chat of interest
+/// * `messageIdx` - Index of the message of interest
+#[tauri::command]
+fn star_message(chat: String, messageIdx: usize, state: State<'_, AppState>) -> Result<(), String> {
+    let locked_chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    for c in locked_chats.iter() {
+        if c.name == chat {
+            if messageIdx >= c.messages.len() {
+                return Err("No message exists at that index".to_owned());
+            }
+            c.messages[messageIdx].starred.fetch_not(Relaxed);
+            return Ok(());
+        }
+    }
+    return Err("Failed to find chat".to_owned());
+}
+
+/// Gets the starred messages for the specified `chat`
+/// # Args
+/// * `chat` - Name of the chat
+#[tauri::command]
+fn get_starred(chat: String, state: State<'_, AppState>) -> Result<Vec<Message>, String> {
+    let locked_chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    for c in locked_chats.iter() {
+        if c.name == chat {
+            return Ok(c
+                .messages
+                .iter()
+                .filter(|m| m.starred.load(Relaxed))
+                .map(|m| m.clone())
+                .collect());
+        }
+    }
+    return Err("Failed to find chat".to_owned());
+}
+
 /// Searches `directory` for a file named `path`; if one is found, the full string path
 fn full_file_path(
     path: &str,
@@ -317,16 +430,19 @@ fn parse_whatsapp_export(
                     ExportVersion::OLD => {
                         // If the message doesn't start with a open square bracket, it's a continuation of the previous message
                         if !l.starts_with('[') {
-                            let last_idx = messages.len() - 2;
-                            let last_msg = &messages[last_idx];
-                            if let MessageContent::Text(last_msg_content) = &last_msg.content {
-                                messages[last_idx] = Message {
-                                    timestamp: last_msg.timestamp,
-                                    sender: last_msg.sender.clone(),
-                                    content: MessageContent::Text(
-                                        last_msg_content.to_owned() + "\n" + &l,
-                                    ),
-                                };
+                            if let Some(last_idx) = messages.len().checked_sub(1) {
+                                let last_msg = &messages[last_idx];
+                                if let MessageContent::Text(last_msg_content) = &last_msg.content {
+                                    messages[last_idx] = Message {
+                                        timestamp: last_msg.timestamp,
+                                        sender: last_msg.sender.clone(),
+                                        content: MessageContent::Text(
+                                            last_msg_content.to_owned() + "\n" + &l,
+                                        ),
+                                        starred: AtomicBool::new(false),
+                                        idx: last_msg.idx,
+                                    };
+                                }
                             }
                         }
                         // Otherwise it's the start of a normal message
@@ -371,6 +487,8 @@ fn parse_whatsapp_export(
                                             ),
                                             caption: None,
                                         }),
+                                        starred: AtomicBool::new(false),
+                                        idx: messages.len(),
                                     });
                                 } else {
                                     messages.push(Message {
@@ -379,6 +497,8 @@ fn parse_whatsapp_export(
                                         content: MessageContent::Text(
                                             l[colon_idx + 2..].to_string(),
                                         ),
+                                        starred: AtomicBool::new(false),
+                                        idx: messages.len(),
                                     })
                                 }
                             }
@@ -397,6 +517,8 @@ fn parse_whatsapp_export(
                                     content: MessageContent::System(
                                         l[time_end_idx + 2..].to_string(),
                                     ),
+                                    starred: AtomicBool::new(false),
+                                    idx: messages.len(),
                                 })
                             }
                         }
@@ -423,6 +545,8 @@ fn parse_whatsapp_export(
                                                 path: None,
                                                 caption: None,
                                             }),
+                                            starred: AtomicBool::new(false),
+                                            idx: messages.len(),
                                         })
                                     } else if l.ends_with("(file attached)") {
                                         let file_name = &l[colon_idx + 2..l.len() - 16];
@@ -456,6 +580,8 @@ fn parse_whatsapp_export(
                                                 ),
                                                 caption: None,
                                             }),
+                                            starred: AtomicBool::new(false),
+                                            idx: messages.len(),
                                         });
                                     } else {
                                         messages.push(Message {
@@ -464,6 +590,8 @@ fn parse_whatsapp_export(
                                             content: MessageContent::Text(
                                                 l[colon_idx + 2..].to_string(),
                                             ),
+                                            starred: AtomicBool::new(false),
+                                            idx: messages.len(),
                                         })
                                     }
                                 }
@@ -482,12 +610,13 @@ fn parse_whatsapp_export(
                                         content: MessageContent::System(
                                             l[dash_idx + 4..].to_string(),
                                         ),
+                                        starred: AtomicBool::new(false),
+                                        idx: messages.len(),
                                     })
                                 }
                             }
                             // If the dash is not in the first 19 characters, it's not part of the message time
-                            else {
-                                let last_idx = messages.len() - 2;
+                            else if let Some(last_idx) = messages.len().checked_sub(1) {
                                 let last_msg = &messages[last_idx];
                                 if let MessageContent::Text(last_msg_content) = &last_msg.content {
                                     messages[last_idx] = Message {
@@ -496,13 +625,14 @@ fn parse_whatsapp_export(
                                         content: MessageContent::Text(
                                             last_msg_content.to_owned() + "\n" + &l,
                                         ),
+                                        starred: AtomicBool::new(false),
+                                        idx: last_msg.idx,
                                     };
                                 }
                             }
                         }
                         // If there is no match, it's probably a continuation of the previous message
-                        else {
-                            let last_idx = messages.len() - 2;
+                        else if let Some(last_idx) = messages.len().checked_sub(1) {
                             let last_msg = &messages[last_idx];
                             if let MessageContent::Text(last_msg_content) = &last_msg.content {
                                 messages[last_idx] = Message {
@@ -511,6 +641,8 @@ fn parse_whatsapp_export(
                                     content: MessageContent::Text(
                                         last_msg_content.to_owned() + "\n" + &l,
                                     ),
+                                    starred: AtomicBool::new(false),
+                                    idx: last_msg.idx,
                                 };
                             } else if let MessageContent::Media(last_msg_content) =
                                 &last_msg.content
@@ -528,6 +660,8 @@ fn parse_whatsapp_export(
                                             None => Some(l),
                                         },
                                     }),
+                                    starred: AtomicBool::new(false),
+                                    idx: last_msg.idx,
                                 }
                             }
                         }
@@ -548,6 +682,8 @@ fn parse_whatsapp_export(
                                 timestamp: message.timestamp,
                                 sender: Some(s.to_owned()),
                                 content: message.content.clone(),
+                                starred: AtomicBool::new(false),
+                                idx: message.idx,
                             }
                         }
                     }
@@ -564,6 +700,36 @@ fn parse_whatsapp_export(
         },
         name: name.to_owned(),
     })
+}
+
+fn find_first_overlap_idx(
+    combined_messages: &VecDeque<Message>,
+    new_messages: &Vec<Message>,
+) -> Option<(usize, usize)> {
+    let mut start_overlap_idx = 0;
+    let mut start_overlap_idx_combined = 0;
+    let mut num_overlap = 0usize;
+    let mut non_media_overlap = false;
+    for (i, m) in new_messages.iter().enumerate() {
+        for (j, mm) in combined_messages.iter().enumerate() {
+            if num_overlap == 0 && m == mm {
+                start_overlap_idx = i;
+                start_overlap_idx_combined = j;
+                num_overlap = 1;
+                non_media_overlap = m.content.is_media()
+            } else if num_overlap > 0 && m != mm {
+                num_overlap = 0;
+                non_media_overlap = false;
+            } else if m == mm {
+                num_overlap += 1;
+                non_media_overlap |= m.content.is_media();
+                if num_overlap > NUMBER_TO_ALIGN && non_media_overlap {
+                    return Some((start_overlap_idx, start_overlap_idx_combined));
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Combines the WhatsApp `chats`. Messages with identical content are combined within a +/- 12 hour window.
@@ -599,7 +765,7 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
             }
         }
     }
-    let mut combined_chat: VecDeque<&Message> = VecDeque::with_capacity(max_len);
+    let mut combined_chat: VecDeque<Message> = VecDeque::with_capacity(max_len);
     let mut max_timestamp: Option<NaiveDateTime> = None;
     let mut min_timestamp: Option<NaiveDateTime> = None;
     for (messages, timestamps) in all_chat_messages.into_iter().zip(all_chat_timestamps) {
@@ -607,32 +773,80 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
             continue;
         }
         match (min_timestamp, max_timestamp) {
+            // If there is currently no min/max time, this is the first set of messages
             (None, None) => {
                 max_timestamp = Some(messages.iter().map(|m| m.timestamp).max().unwrap());
                 min_timestamp = Some(messages.iter().map(|m| m.timestamp).min().unwrap());
                 for m in messages {
-                    combined_chat.push_back(m);
+                    combined_chat.push_back(m.clone());
                 }
             }
+            // Otherwise try to combine
             (Some(min_t), Some(max_t)) => {
-                let start_idx = match timestamps.binary_search(&max_t) {
-                    Ok(i) => i,
-                    Err(i) => i,
-                };
-                let start_rev_idx = match timestamps.binary_search(&min_t) {
-                    Ok(i) => i,
-                    Err(i) => i,
-                };
-                for m in &messages[start_idx..] {
-                    if m.timestamp > max_t {
-                        combined_chat.push_back(m);
-                        max_timestamp = Some(m.timestamp);
+                // Find where the messages start overlapping
+                match find_first_overlap_idx(&combined_chat, &messages) {
+                    Some((start_overlap_idx_new, start_overlap_idx_combined)) => {
+                        // Add messages before the start of the overlap index to the front of combined
+                        for i in (0..start_overlap_idx_new).rev() {
+                            if i == 0 {
+                                min_timestamp = Some(messages[i].timestamp);
+                            }
+                            combined_chat.push_front(messages[i].clone());
+                        }
+                        // Then loop through the overlapping region
+                        let mut last_done_idx = start_overlap_idx_new;
+                        for (i, m) in messages[start_overlap_idx_new..].iter().enumerate() {
+                            let idx_in_combined =
+                                i + start_overlap_idx_new + start_overlap_idx_combined;
+                            if idx_in_combined > combined_chat.len()
+                                || m != &combined_chat[idx_in_combined]
+                            {
+                                break;
+                            }
+                            match &m.content {
+                                MessageContent::Media(media) => {
+                                    match &mut combined_chat[idx_in_combined].content {
+                                        MessageContent::Media(present_content) => {
+                                            if present_content.path.is_none()
+                                                && media.path.is_some()
+                                            {
+                                                present_content.path = media.path.clone();
+                                            }
+                                            if present_content.caption.is_none()
+                                                && media.caption.is_some()
+                                            {
+                                                present_content.caption = media.caption.clone();
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                            last_done_idx += 1;
+                        }
+                        // Add messages that were past the overlapping region
+                        for m in &messages[last_done_idx..] {
+                            combined_chat.push_back(m.clone());
+                        }
+                        max_timestamp =
+                            Some(combined_chat.iter().map(|c| c.timestamp).max().unwrap());
                     }
-                }
-                for i in (0..start_rev_idx).rev() {
-                    if messages[i].timestamp < min_t {
-                        combined_chat.push_front(&messages[i]);
-                        min_timestamp = Some(messages[i].timestamp);
+                    None => {
+                        // If every new message is older, then just add them to the front
+                        if timestamps.iter().max().unwrap() < &min_t {
+                            for m in messages.iter().rev() {
+                                combined_chat.push_front(m.clone());
+                            }
+                            min_timestamp = Some(*timestamps.iter().min().unwrap());
+                        }
+                        // If every new message is newer, then just add them to the back
+                        else if timestamps.iter().min().unwrap() > &max_t {
+                            for m in messages {
+                                combined_chat.push_back(m.clone());
+                            }
+                            max_timestamp = Some(*timestamps.iter().max().unwrap());
+                        }
                     }
                 }
             }
@@ -640,7 +854,17 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
         }
     }
     return WhatsAppChat {
-        messages: combined_chat.into_iter().map(|m| m.clone()).collect(),
+        messages: combined_chat
+            .into_iter()
+            .enumerate()
+            .map(|(idx, m)| Message {
+                timestamp: m.timestamp,
+                sender: m.sender,
+                content: m.content,
+                starred: m.starred,
+                idx,
+            })
+            .collect(),
         directories,
         name,
     };
@@ -655,7 +879,7 @@ fn get_chat(chat: String, state: State<'_, AppState>) -> Result<Arc<WhatsAppChat
 
     match locked_chats.iter().find(|c| c.name == chat) {
         Some(c) => {
-            return Ok(c.clone());
+            return Ok(Arc::clone(c));
         }
         None => {
             return Err("Failed to find chat".to_owned());
@@ -692,6 +916,7 @@ fn load_chats(
             last_sent: combined.messages.iter().map(|c| c.timestamp).max(),
             last_message: combined.messages.last().cloned(),
             number_of_messages: combined.messages.len(),
+            starred: Vec::new(),
         });
         chats.push(Arc::new(combined));
     }
@@ -708,7 +933,12 @@ pub fn run() {
         .manage(AppState {
             chats: Vec::new().into(),
         })
-        .invoke_handler(tauri::generate_handler![load_chats, get_chat])
+        .invoke_handler(tauri::generate_handler![
+            load_chats,
+            get_chat,
+            star_message,
+            get_starred
+        ])
         .run(tauri::generate_context!())
         .expect("Error while running application");
 }

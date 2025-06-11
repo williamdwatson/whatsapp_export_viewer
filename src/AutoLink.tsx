@@ -2,12 +2,12 @@
  * Auto-link component from https://www.30secondsofcode.org/react/s/auto-link/
  */
 export default function AutoLink({ text }: { text: string }) {
-    const url_delimiter = /((?:https?:\/\/)?(?:(?:[a-z0-9]?(?:[a-z0-9\-]{1,61}[a-z0-9])?\.[^\.|\s])+[a-z\.]*[a-z]+|(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3})(?::\d{1,5})*[a-z0-9.,_\/~#&=;%+?\-\\(\\)]*)/gi;
+    const url_delimiter = /\b(?:https?:\/\/)?(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+(?:com|net|org|edu|gov|us|ca|uk|is)(?::\d{1,5})?(?:\/[^\s]*)?\b/gi;
     const email_delimiter = /\S+@\S+\.\S+/gi;
     // TODO Phone numbers (would require a separate pass not splitting on whitespace)
     return (
         <>
-            {text.split(/(\s)/).map(word => {
+            {text.split(/( )/).map(word => {
                 const url_match = word.match(url_delimiter);
                 const email_match = word.match(email_delimiter);
                 if (email_match) {
@@ -33,6 +33,9 @@ export default function AutoLink({ text }: { text: string }) {
                 }
                 else if (word.startsWith("`") && word.endsWith("`")) {
                     return <code>{word.substring(3, word.length - 3)}</code>
+                }
+                else if (word.includes("\n")) {
+                    return <span style={{ whiteSpace: "pre-wrap" }}>{word}</span>
                 }
                 return word;
             })}
