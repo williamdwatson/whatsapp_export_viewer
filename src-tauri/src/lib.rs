@@ -170,7 +170,7 @@ struct ChatSummary {
 }
 
 /// Count of each message type
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 struct MessageTypeCount {
     /// Number of text messages
     text: u64,
@@ -181,7 +181,7 @@ struct MessageTypeCount {
 }
 
 /// Count of each media type
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize)]
 struct MediaTypeCount {
     /// Number of photos
     photo: u64,
@@ -195,8 +195,10 @@ struct MediaTypeCount {
 
 /// A chat from the frontend to load
 #[derive(Deserialize)]
+#[allow(non_snake_case)]
 struct ChatToLoad {
     /// Unique chat ID
+    #[allow(dead_code)]
     id: u64,
     /// Chat file path
     chatFile: String,
@@ -214,8 +216,8 @@ struct AppState {
 
 impl WhatsAppChat {
     /// Gets the number of messages sent by each person in the chat broken down by type
-    fn count_by_sender(&self) -> HashMap<&String, MessageTypeCount> {
-        let mut to_return: HashMap<&String, MessageTypeCount> = HashMap::new();
+    fn count_by_sender(&self) -> HashMap<String, MessageTypeCount> {
+        let mut to_return: HashMap<String, MessageTypeCount> = HashMap::new();
         self.messages.iter().for_each(|m| match &m.sender {
             Some(s) => match to_return.get_mut(s) {
                 Some(mtc) => match &m.content {
@@ -232,7 +234,7 @@ impl WhatsAppChat {
                     match &m.content {
                         MessageContent::Text(_) => {
                             to_return.insert(
-                                s,
+                                s.clone(),
                                 MessageTypeCount {
                                     text: 1,
                                     media: MediaTypeCount::default(),
@@ -242,7 +244,7 @@ impl WhatsAppChat {
                         }
                         MessageContent::System(_) => {
                             to_return.insert(
-                                s,
+                                s.clone(),
                                 MessageTypeCount {
                                     text: 0,
                                     media: MediaTypeCount::default(),
@@ -278,7 +280,7 @@ impl WhatsAppChat {
                                 },
                             };
                             to_return.insert(
-                                s,
+                                s.clone(),
                                 MessageTypeCount {
                                     text: 0,
                                     media: media_type_count,
@@ -292,28 +294,6 @@ impl WhatsAppChat {
             _ => {}
         });
         return to_return;
-    }
-
-    /// Gets the number of messages of each type sent
-    fn count_by_type(&self) -> MessageTypeCount {
-        let mut text = 0;
-        let mut media = MediaTypeCount::default();
-        let mut system = 0;
-        self.messages.iter().for_each(|m| match &m.content {
-            MessageContent::Text(_) => text += 1,
-            MessageContent::Media(mm) => match mm.media_type {
-                MediaType::PHOTO => media.photo += 1,
-                MediaType::VIDEO => media.video += 1,
-                MediaType::AUDIO => media.audio += 1,
-                MediaType::OTHER => media.other += 1,
-            },
-            MessageContent::System(_) => system += 1,
-        });
-        return MessageTypeCount {
-            text,
-            media,
-            system,
-        };
     }
 }
 
@@ -353,6 +333,7 @@ fn search(chat: String, search: String, state: State<'_, AppState>) -> Result<Ve
 /// * `chat` - Name of the chat of interest
 /// * `messageIdx` - Index of the message of interest
 #[tauri::command]
+#[allow(non_snake_case)]
 fn star_message(chat: String, messageIdx: usize, state: State<'_, AppState>) -> Result<(), String> {
     let locked_chats = state
         .chats
@@ -387,6 +368,24 @@ fn get_starred(chat: String, state: State<'_, AppState>) -> Result<Vec<Message>,
                 .filter(|m| m.starred.load(Relaxed))
                 .map(|m| m.clone())
                 .collect());
+        }
+    }
+    return Err("Failed to find chat".to_owned());
+}
+
+/// Gets chat statistics
+#[tauri::command]
+fn get_stats(
+    chat: String,
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, MessageTypeCount>, String> {
+    let locked_chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    for c in locked_chats.iter() {
+        if c.name == chat {
+            return Ok(c.count_by_sender());
         }
     }
     return Err("Failed to find chat".to_owned());
@@ -614,7 +613,7 @@ fn parse_whatsapp_export(
                                             starred: AtomicBool::new(false),
                                             idx: messages.len(),
                                         });
-                                    } else {
+                                    } else if l[colon_idx + 2..].to_string().trim() != "null" {
                                         messages.push(Message {
                                             timestamp,
                                             sender: Some(sender),
@@ -969,7 +968,8 @@ pub fn run() {
             get_chat,
             search,
             star_message,
-            get_starred
+            get_starred,
+            get_stats
         ])
         .run(tauri::generate_context!())
         .expect("Error while running application");

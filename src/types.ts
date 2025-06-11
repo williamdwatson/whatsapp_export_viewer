@@ -141,3 +141,38 @@ export type settings_t = {
      */
     you: string | null
 }
+
+/**
+ * Statistics about a chat
+ */
+export type statistics_t = Record<string, {
+    /**
+     * Number of sent text messages
+     */
+    text: number,
+    /**
+     * Number of sent/associated system messages
+     */
+    system: number,
+    /**
+     * Number of sent audio messages
+     */
+    media: {
+        /**
+         * Number of sent photos
+         */
+        photo: number,
+        /**
+         * Number of sent videos
+         */
+        video: number,
+        /**
+         * Number of sent recordings
+         */
+        audio: number,
+        /**
+         * Number of sent files/unknown types
+         */
+        other: number
+    }
+}>

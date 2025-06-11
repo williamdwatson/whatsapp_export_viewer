@@ -92,7 +92,7 @@ interface TextChatProps {
 function TextChat(props: TextChatProps) {
     return <div style={{ float: props.fromYou ? "right" : undefined }}>
         {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
-        <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block" }} title={getTitle(props.message, props.starMessage)}>
+        <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)}>
             <p style={{ margin: 0 }}>
                 {props.highlightText == null ?
                     <AutoLink text={props.message.content.Text} />
@@ -100,7 +100,7 @@ function TextChat(props: TextChatProps) {
                 }
             </p>
         </Card>
-        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px" }} /> : null}
+        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px", marginRight: "5px", color: "var(--surface-section)", backgroundColor: "var(--primary-color)" }} /> : null}
     </div>
 }
 
@@ -162,7 +162,7 @@ function MediaChat(props: MediaChatProps) {
     }
     return <div style={{ float: props.fromYou ? "right" : undefined }}>
         {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
-        <Card style={{ width: undefined, display: "inline-block" }} title={getTitle(props.message, props.starMessage)}>
+        <Card style={{ width: undefined, display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)}>
             {element}
             {props.message.content.Media.caption == null ? null :
                 <p style={{ margin: 0 }}>
@@ -173,7 +173,7 @@ function MediaChat(props: MediaChatProps) {
                 </p>
             }
         </Card>
-        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px" }} /> : null}
+        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px", marginRight: "5px", color: "var(--surface-section)", backgroundColor: "var(--primary-color)" }} /> : null}
     </div>
 }
 

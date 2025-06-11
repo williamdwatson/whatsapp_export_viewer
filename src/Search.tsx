@@ -92,7 +92,7 @@ export default function Search(props: SearchProps) {
      */
     const hide = () => {
         props.setShow(false);
-        setFoundIdxes([]);
+        setFoundIdxes(null);
         cache.current.clearAll();
     }
 
