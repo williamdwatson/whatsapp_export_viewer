@@ -4,7 +4,7 @@ import { simpleHash } from "./utilities";
  * Auto-link component from https://www.30secondsofcode.org/react/s/auto-link/ with changes
  */
 export default function AutoLink({ text }: { text: string }) {
-    const url_delimiter = /\b(?:https?:\/\/)?(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+(?:com|net|org|edu|gov|us|ca|uk|is)(?::\d{1,5})?(?:\/[^\s]*)?\b/gi;
+    const url_delimiter = /\b(?:https?:\/\/)?(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+(?:com|net|org|edu|gov|us|ca|uk|is|gl)(?::\d{1,5})?(?:\/[^\s]*)?\b/gi;
     const email_delimiter = /\S+@\S+\.\S+/gi;
     const hashed = simpleHash(text);
     // TODO Phone numbers (would require a separate pass not splitting on whitespace)

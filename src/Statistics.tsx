@@ -19,12 +19,21 @@ interface StatisticsProps {
     stats: statistics_t,
 }
 
+/**
+ * Dialog for chat statistics
+ */
 export default function Statistics(props: StatisticsProps) {
 
-    const mediaPart = (num: number) => {
+    /**
+     * The template for a media sub-stat
+     * @param num Number to display
+     * @returns `num` formatted for display
+     */
+    const mediaPartTemplate = (num: number) => {
         return <i>{num}</i>
     }
 
+    // Reformat `props.stats` for use in the `DataTable`
     const vals = Object.entries(props.stats).map(([sender, v]) => {
         return {
             sender,
@@ -37,14 +46,15 @@ export default function Statistics(props: StatisticsProps) {
             total: v.text + v.system + Object.values(v.media).reduce((prev, curr) => prev + curr, 0)
         }
     });
+
     return <Dialog header="Statistics" visible={props.show} onHide={() => props.setShow(false)} dismissableMask>
         <DataTable value={vals} scrollable scrollHeight="flex" emptyMessage="No messages">
             <Column header="Who?" field="sender" sortable />
             <Column header="Text" field="text" dataType="numeric" sortable />
-            <Column header="Photos" field="photo" dataType="numeric" sortable body={row => mediaPart(row.photo)} />
-            <Column header="Videos" field="video" dataType="numeric" sortable body={row => mediaPart(row.video)} />
-            <Column header="Audio" field="audio" dataType="numeric" sortable body={row => mediaPart(row.audio)} />
-            <Column header="Other files" field="other" dataType="numeric" sortable body={row => mediaPart(row.other)} />
+            <Column header="Photos" field="photo" dataType="numeric" sortable body={row => mediaPartTemplate(row.photo)} />
+            <Column header="Videos" field="video" dataType="numeric" sortable body={row => mediaPartTemplate(row.video)} />
+            <Column header="Audio" field="audio" dataType="numeric" sortable body={row => mediaPartTemplate(row.audio)} />
+            <Column header="Other files" field="other" dataType="numeric" sortable body={row => mediaPartTemplate(row.other)} />
             <Column header="Media" field="media" dataType="numeric" sortable />
             <Column header="Total" field="total" dataType="numeric" sortable body={row => <b>{row.total}</b>} />
         </DataTable>

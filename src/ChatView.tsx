@@ -165,7 +165,6 @@ export default function ChatView(props: ChatViewProps) {
     const end = <div>
         <Button type="button" icon="pi pi-search" rounded onClick={() => setShowSearch(true)} disabled={selectedChat == null} />
         <Button type="button" icon="pi pi-star" rounded style={{ marginLeft: "10px" }} onClick={loadStarred} disabled={selectedChat == null} />
-        <Button type="button" icon="pi pi-filter" rounded style={{ marginLeft: "10px" }} disabled={selectedChat == null} />
         <Button type="button" icon="pi pi-cog" rounded style={{ marginLeft: "10px", marginRight: "10px" }} onClick={() => setShowSettings(true)} disabled={selectedChat == null} />
         <Button type="button" icon="pi pi-chart-bar" rounded onClick={loadStats} disabled={selectedChat == null} />
     </div>

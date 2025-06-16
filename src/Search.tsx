@@ -97,7 +97,7 @@ export default function Search(props: SearchProps) {
     }
 
     return <Dialog header="Search" visible={props.show} onHide={hide} dismissableMask style={{ width: "50vw" }}>
-        <form style={{ textAlign: "center", marginTop: "5px" }} onSubmit={doSearch}>
+        <form style={{ textAlign: "center", marginTop: "5px", marginBottom: "15px" }} onSubmit={doSearch}>
             <InputText id="search" placeholder="Search" style={{ marginRight: "5px" }} type="search" />
             <Button type="submit" label="Search" icon="pi pi-search" />
         </form>
