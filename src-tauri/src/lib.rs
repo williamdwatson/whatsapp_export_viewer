@@ -10,11 +10,18 @@ use std::{
 };
 
 use chrono::{Duration, NaiveDateTime};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 /// Number of identical messages required to align
 const NUMBER_TO_ALIGN: usize = 5;
+
+/// Maximum number of messages allowed to be out of order during chat combining
+const MAX_OUT_OF_ORDER: usize = 10;
+
+/// Maximum number of subsequent messages that are allowed to be missing during chat combining
+const MAX_SKIPPABLE: usize = 3;
 
 /// The export version of a WhatsApp chat
 enum ExportVersion {
@@ -35,7 +42,7 @@ const VIDEO_TYPES: [&'static str; 7] = ["mp4", "avi", "mov", "wmv", "mkv", "webm
 const AUDIO_TYPES: [&'static str; 5] = ["opus", "mp3", "aac", "ogg", "wav"];
 
 /// The type of the media
-#[derive(Copy, Clone, PartialEq, Eq, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 enum MediaType {
     /// A photo
     PHOTO,
@@ -48,7 +55,7 @@ enum MediaType {
 }
 
 /// Represents a media message
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct Media {
     /// Media type
     media_type: MediaType,
@@ -59,27 +66,28 @@ struct Media {
 }
 
 impl PartialEq for Media {
-    /// Checks if two media messages are the same. This is true if
-    /// * The `media_type`s are the same
-    /// * If both have captions, the captions are the same
+    /// Checks if two media messages are the same. This is false if
+    /// * Both have captions but the captions are not the same
+    /// * Both have paths but their media types are not the same
+    /// Otherwise, it returns true
     ///
     /// `path` is not checked, since those may belong to different directories.
     fn eq(&self, other: &Self) -> bool {
-        if self.media_type != other.media_type {
-            return false;
-        }
         if self.caption.is_some() && other.caption.is_some() {
             if self.caption != other.caption {
                 return false;
             }
         }
-        return true;
+        if self.path.is_none() || other.path.is_none() {
+            return true;
+        }
+        return self.media_type == other.media_type;
     }
 }
 impl Eq for Media {}
 
 /// The content of a WhatsApp message
-#[derive(Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 enum MessageContent {
     /// A standard text message
     Text(String),
@@ -90,16 +98,35 @@ enum MessageContent {
 }
 
 impl MessageContent {
+    /// Checks whether this is a media message
     fn is_media(&self) -> bool {
         match self {
             MessageContent::Media(_) => true,
             _ => false,
         }
     }
+
+    /// Checks whether this is a system message
+    fn is_system(&self) -> bool {
+        match self {
+            MessageContent::System(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Checks whether this a location message
+    fn is_location(&self) -> bool {
+        match self {
+            MessageContent::Text(content) => {
+                content.trim_start().to_lowercase().starts_with("location:")
+            }
+            _ => false,
+        }
+    }
 }
 
 /// A single WhatsApp message
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct Message {
     /// When the message was sent
     timestamp: NaiveDateTime,
@@ -521,35 +548,41 @@ fn parse_whatsapp_export(
                                         idx: messages.len(),
                                     });
                                 } else {
-                                    messages.push(Message {
-                                        timestamp,
-                                        sender: Some(sender),
-                                        content: MessageContent::Text(
-                                            l[colon_idx + 2..].to_string(),
-                                        ),
-                                        starred: AtomicBool::new(false),
-                                        idx: messages.len(),
-                                    })
+                                    // This message doesn't appear in the same place in "new" exports
+                                    if l[colon_idx + 2..] != *"Messages to this group are now secured with end-to-end encryption." {
+                                        messages.push(Message {
+                                            timestamp,
+                                            sender: Some(sender),
+                                            content: MessageContent::Text(
+                                                l[colon_idx + 2..].to_string(),
+                                            ),
+                                            starred: AtomicBool::new(false),
+                                            idx: messages.len(),
+                                        });
+                                    }
                                 }
                             }
                             // Handle "system" messages
                             else {
-                                // They probably start with a previous user's name
-                                let mut sender = None;
-                                for s in senders.iter() {
-                                    if l[time_end_idx + 2..].starts_with(s) {
-                                        sender = Some(s.to_owned());
+                                // Icon messages aren't included in the "new" exports, which can hinder matching them up
+                                if !l[time_end_idx + 2..].ends_with("icon") {
+                                    // They probably start with a previous user's name
+                                    let mut sender = None;
+                                    for s in senders.iter() {
+                                        if l[time_end_idx + 2..].starts_with(s) {
+                                            sender = Some(s.to_owned());
+                                        }
                                     }
+                                    messages.push(Message {
+                                        timestamp,
+                                        sender,
+                                        content: MessageContent::System(
+                                            l[time_end_idx + 2..].to_string(),
+                                        ),
+                                        starred: AtomicBool::new(false),
+                                        idx: messages.len(),
+                                    });
                                 }
-                                messages.push(Message {
-                                    timestamp,
-                                    sender,
-                                    content: MessageContent::System(
-                                        l[time_end_idx + 2..].to_string(),
-                                    ),
-                                    starred: AtomicBool::new(false),
-                                    idx: messages.len(),
-                                })
                             }
                         }
                     }
@@ -577,7 +610,7 @@ fn parse_whatsapp_export(
                                             }),
                                             starred: AtomicBool::new(false),
                                             idx: messages.len(),
-                                        })
+                                        });
                                     } else if l.ends_with("(file attached)") {
                                         let file_name = &l[colon_idx + 2..l.len() - 16];
                                         let media_type = if PHOTO_TYPES
@@ -622,27 +655,30 @@ fn parse_whatsapp_export(
                                             ),
                                             starred: AtomicBool::new(false),
                                             idx: messages.len(),
-                                        })
+                                        });
                                     }
                                 }
                                 // Handle "system" messages
                                 else {
-                                    // They probably start with a previous user's name
-                                    let mut sender = None;
-                                    for s in senders.iter() {
-                                        if l[dash_idx + 4..].starts_with(s) {
-                                            sender = Some(s.to_owned());
+                                    // This message appears in a different place in the "old" exports
+                                    if l[dash_idx + 4..] != * "Messages and calls are end-to-end encrypted. Only people in this chat can read, listen to, or share them. Learn more." {
+                                        // They probably start with a previous user's name
+                                        let mut sender = None;
+                                        for s in senders.iter() {
+                                            if l[dash_idx + 4..].starts_with(s) {
+                                                sender = Some(s.to_owned());
+                                            }
                                         }
+                                        messages.push(Message {
+                                            timestamp,
+                                            sender,
+                                            content: MessageContent::System(
+                                                l[dash_idx + 4..].to_string(),
+                                            ),
+                                            starred: AtomicBool::new(false),
+                                            idx: messages.len(),
+                                        });
                                     }
-                                    messages.push(Message {
-                                        timestamp,
-                                        sender,
-                                        content: MessageContent::System(
-                                            l[dash_idx + 4..].to_string(),
-                                        ),
-                                        starred: AtomicBool::new(false),
-                                        idx: messages.len(),
-                                    })
                                 }
                             }
                             // If the dash is not in the first 19 characters, it's not part of the message time
@@ -732,33 +768,40 @@ fn parse_whatsapp_export(
     })
 }
 
+/// Attempts to find the index of the first overlap between two sequences of messages
+/// where the overlap is greater than length `NUMBER_TO_ALIGN` and where at least one message is non-media
+/// # Args
+/// * `combined_messages` - Sequence of messages to align to
+/// * `new_messages` - Sequence of messages to align with `combined_messages`
 fn find_first_overlap_idx(
     combined_messages: &VecDeque<Message>,
     new_messages: &Vec<Message>,
 ) -> Option<(usize, usize)> {
-    let mut start_overlap_idx = 0;
-    let mut start_overlap_idx_combined = 0;
-    let mut num_overlap = 0usize;
-    let mut non_media_overlap = false;
-    for (i, m) in new_messages.iter().enumerate() {
-        for (j, mm) in combined_messages.iter().enumerate() {
-            if num_overlap == 0 && m == mm {
-                start_overlap_idx = i;
-                start_overlap_idx_combined = j;
-                num_overlap = 1;
-                non_media_overlap = m.content.is_media()
-            } else if num_overlap > 0 && m != mm {
-                num_overlap = 0;
-                non_media_overlap = false;
-            } else if m == mm {
-                num_overlap += 1;
-                non_media_overlap |= m.content.is_media();
-                if num_overlap > NUMBER_TO_ALIGN && non_media_overlap {
-                    return Some((start_overlap_idx, start_overlap_idx_combined));
+    let combined_len = combined_messages.len();
+    let new_len = new_messages.len();
+
+    for new_start in 0..new_len {
+        for combined_start in 0..combined_len {
+            let mut count = 0;
+            let mut has_non_media = false;
+
+            while new_start + count < new_len
+                && combined_start + count < combined_len
+                && new_messages[new_start + count] == combined_messages[combined_start + count]
+            {
+                if !new_messages[new_start + count].content.is_media() {
+                    has_non_media = true;
+                }
+
+                count += 1;
+
+                if count >= NUMBER_TO_ALIGN && has_non_media {
+                    return Some((new_start, combined_start));
                 }
             }
         }
     }
+
     None
 }
 
@@ -802,6 +845,7 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
         if messages.is_empty() {
             continue;
         }
+        println!("{:?}", find_first_overlap_idx(&combined_chat, &messages));
         match (min_timestamp, max_timestamp) {
             // If there is currently no min/max time, this is the first set of messages
             (None, None) => {
@@ -825,13 +869,216 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
                         }
                         // Then loop through the overlapping region
                         let mut last_done_idx = start_overlap_idx_new;
-                        for (i, m) in messages[start_overlap_idx_new..].iter().enumerate() {
-                            let idx_in_combined =
-                                i + start_overlap_idx_new + start_overlap_idx_combined;
-                            if idx_in_combined > combined_chat.len()
-                                || m != &combined_chat[idx_in_combined]
-                            {
+                        let mut i = 0;
+                        let mut num_inserted = 0;
+                        while i < messages.len() {
+                            let m = &messages[i + start_overlap_idx_new];
+                            let idx_in_combined = i
+                                + start_overlap_idx_new
+                                + start_overlap_idx_combined
+                                + num_inserted;
+                            if idx_in_combined >= combined_chat.len() {
                                 break;
+                            }
+                            if m != &combined_chat[idx_in_combined]
+                                && !m.content.is_system()
+                                && !combined_chat[idx_in_combined].content.is_system()
+                                && !(m.content.is_location()
+                                    && combined_chat[idx_in_combined].content.is_location())
+                            {
+                                let mut found_match = false;
+                                if (m.timestamp > combined_chat[idx_in_combined].timestamp)
+                                    && (m.timestamp - combined_chat[idx_in_combined].timestamp)
+                                        > Duration::days(1)
+                                {
+                                    let mut j = 1;
+                                    while idx_in_combined + j < combined_chat.len() {
+                                        if m == &combined_chat[idx_in_combined + j] {
+                                            num_inserted += j;
+                                            i += 1;
+                                            last_done_idx += 1;
+                                            found_match = true;
+                                            break;
+                                        }
+                                        j += 1;
+                                    }
+                                    if found_match {
+                                        continue;
+                                    }
+                                } else if (m.timestamp < combined_chat[idx_in_combined].timestamp)
+                                    && (combined_chat[idx_in_combined].timestamp - m.timestamp)
+                                        > Duration::days(1)
+                                {
+                                    let mut j = 0;
+                                    let chat_to_match = combined_chat[idx_in_combined].clone();
+                                    while i + start_overlap_idx_new < messages.len()
+                                        && messages[i + start_overlap_idx_new] != chat_to_match
+                                    {
+                                        combined_chat.insert(
+                                            idx_in_combined + j,
+                                            messages[i + start_overlap_idx_new + j].clone(),
+                                        );
+                                        j += 1;
+                                        i += 1;
+                                        num_inserted += 1;
+                                        last_done_idx += 1;
+                                    }
+                                    continue;
+                                }
+                                for num_to_check in 2..=MAX_OUT_OF_ORDER {
+                                    // If the number we're checking would take us beyond either bound, then stop checking
+                                    if idx_in_combined + num_to_check >= combined_chat.len()
+                                        || i + start_overlap_idx_new + num_to_check
+                                            >= messages.len()
+                                    {
+                                        break;
+                                    }
+                                    // Create every combination of 0 through `num_to_check`
+                                    for combo in (0..num_to_check).permutations(num_to_check) {
+                                        // If all message pairs aren't equal, then stop
+                                        if !combo.iter().enumerate().all(|(j, k)| {
+                                            messages[i + start_overlap_idx_new + j]
+                                                == combined_chat[idx_in_combined + k]
+                                        }) {
+                                            continue;
+                                        }
+                                        // Otherwise, loop through each pair and combine media information if possible
+                                        // Then break
+                                        for (j, k) in combo.into_iter().enumerate() {
+                                            match &messages[i + start_overlap_idx_new + j].content {
+                                                MessageContent::Media(media) => {
+                                                    match &mut combined_chat[idx_in_combined + k]
+                                                        .content
+                                                    {
+                                                        MessageContent::Media(present_content) => {
+                                                            if present_content.path.is_none()
+                                                                && media.path.is_some()
+                                                            {
+                                                                present_content.path =
+                                                                    media.path.clone();
+                                                            }
+                                                            if present_content.caption.is_none()
+                                                                && media.caption.is_some()
+                                                            {
+                                                                present_content.caption =
+                                                                    media.caption.clone();
+                                                            }
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        found_match = true;
+                                        i += num_to_check;
+                                        last_done_idx += num_to_check;
+                                        break;
+                                    }
+                                    if found_match {
+                                        break;
+                                    }
+                                }
+                                if found_match {
+                                    continue;
+                                } else {
+                                    found_match = false;
+                                    for j in 1..=MAX_SKIPPABLE {
+                                        if i + start_overlap_idx_new + j >= messages.len() {
+                                            break;
+                                        }
+                                        if messages[i + start_overlap_idx_new + j]
+                                            == combined_chat[idx_in_combined]
+                                        {
+                                            match &messages[i + start_overlap_idx_new + j].content {
+                                                MessageContent::Media(media) => {
+                                                    match &mut combined_chat[idx_in_combined]
+                                                        .content
+                                                    {
+                                                        MessageContent::Media(present_content) => {
+                                                            if present_content.path.is_none()
+                                                                && media.path.is_some()
+                                                            {
+                                                                present_content.path =
+                                                                    media.path.clone();
+                                                            }
+                                                            if present_content.caption.is_none()
+                                                                && media.caption.is_some()
+                                                            {
+                                                                present_content.caption =
+                                                                    media.caption.clone();
+                                                            }
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                            last_done_idx += j + 1;
+                                            i += j + 1;
+                                            found_match = true;
+                                            // Insert the missing messages
+                                            for k in (0..j).rev() {
+                                                combined_chat.insert(
+                                                    idx_in_combined,
+                                                    messages[i + start_overlap_idx_new + k].clone(),
+                                                );
+                                                num_inserted += 1;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    if !found_match {
+                                        for j in 1..=MAX_SKIPPABLE {
+                                            if idx_in_combined + j >= combined_chat.len() {
+                                                break;
+                                            }
+                                            if m == &combined_chat[idx_in_combined + j] {
+                                                match &m.content {
+                                                    MessageContent::Media(media) => {
+                                                        match &mut combined_chat
+                                                            [idx_in_combined + j]
+                                                            .content
+                                                        {
+                                                            MessageContent::Media(
+                                                                present_content,
+                                                            ) => {
+                                                                if present_content.path.is_none()
+                                                                    && media.path.is_some()
+                                                                {
+                                                                    present_content.path =
+                                                                        media.path.clone();
+                                                                }
+                                                                if present_content.caption.is_none()
+                                                                    && media.caption.is_some()
+                                                                {
+                                                                    present_content.caption =
+                                                                        media.caption.clone();
+                                                                }
+                                                            }
+                                                            _ => {}
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                                last_done_idx += 1;
+                                                i += 1;
+                                                found_match = true;
+                                                num_inserted += j;
+                                                break;
+                                            }
+                                        }
+                                        if !found_match {
+                                            println!(
+                                                "{:?} and {:?}",
+                                                m, combined_chat[idx_in_combined],
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+                                    continue;
+                                }
                             }
                             match &m.content {
                                 MessageContent::Media(media) => {
@@ -854,6 +1101,7 @@ fn combine_chats(mut chats: Vec<WhatsAppChat>) -> WhatsAppChat {
                                 _ => {}
                             }
                             last_done_idx += 1;
+                            i += 1;
                         }
                         // Add messages that were past the overlapping region
                         for m in &messages[last_done_idx..] {
