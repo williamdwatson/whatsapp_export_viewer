@@ -25,17 +25,29 @@ export default function AutoLink({ text }: { text: string }) {
                 if (word.startsWith("*") && word.endsWith("*")) {
                     return <b key={`${hashed}-${word}`}>{word.substring(1, word.length - 1)}</b>
                 }
+                else if (word.startsWith("*") && word.endsWith("*.")) {
+                    return <><b key={`${hashed}-${word}`}>{word.substring(1, word.length - 2)}</b>.</>
+                }
                 else if (word.startsWith("_") && word.endsWith("_")) {
                     return <i key={`${hashed}-${word}`}>{word.substring(1, word.length - 1)}</i>
                 }
+                else if (word.startsWith("_") && word.endsWith("_.")) {
+                    return <><i key={`${hashed}-${word}`}>{word.substring(1, word.length - 2)}</i>.</>
+                }
                 else if (word.startsWith("~") && word.endsWith("~")) {
                     return <s key={`${hashed}-${word}`}>{word.substring(1, word.length - 1)}</s>
+                }
+                else if (word.startsWith("~") && word.endsWith("~.")) {
+                    return <><s key={`${hashed}-${word}`}>{word.substring(1, word.length - 2)}</s>.</>
                 }
                 else if (word.startsWith("```") && word.endsWith("```")) {
                     return <code key={`${hashed}-${word}`}>{word.substring(3, word.length - 3)}</code>
                 }
                 else if (word.startsWith("`") && word.endsWith("`")) {
-                    return <code key={`${hashed}-${word}`}>{word.substring(3, word.length - 3)}</code>
+                    return <code key={`${hashed}-${word}`}>{word.substring(1, word.length - 1)}</code>
+                }
+                else if (word.startsWith("`") && word.endsWith("`.")) {
+                    return <><code key={`${hashed}-${word}`}>{word.substring(1, word.length - 2)}</code>.</>
                 }
                 else if (word.includes("\n")) {
                     return <span style={{ whiteSpace: "pre-wrap" }} key={`${hashed}-${word}`}>{word}</span>

@@ -135,7 +135,17 @@ export type returned_chat_t = Omit<message_t, "timestamp"> & { timestamp: string
 /**
  * Program settings
  */
-export type settings_t = {
+export type global_settings_t = {
+    /**
+     * Whether to use light mode
+     */
+    lightMode: boolean
+}
+
+/**
+ * Per-chat settings
+ */
+export type chat_settings_t = {
     /**
      * Who "you" are (for right-aligned messages)
      */

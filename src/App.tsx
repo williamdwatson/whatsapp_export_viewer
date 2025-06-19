@@ -1,24 +1,32 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 
 import "./App.css";
 import { LoadChats } from "./LoadChats";
 import { Toast } from "primereact/toast";
-import { chat_summary_t } from "./types";
+import { chat_summary_t, global_settings_t } from "./types";
 import ChatView from "./ChatView";
 
 
 function App() {
     const [chatSummaries, setChatSummaries] = useState<chat_summary_t[]>([]);
+    const [globalSettings, setGlobalSettings] = useState<global_settings_t>({ lightMode: !window.matchMedia("(prefers-color-scheme: dark)").matches });
     const toast = useRef<Toast>(null);
+
+    useEffect(() => {
+        const themeLink = document.getElementById("theme-css") as HTMLLinkElement;
+        if (themeLink) {
+            themeLink.href = `themes/${globalSettings.lightMode ? "light" : "dark"}_theme.css`;
+        }
+    }, [globalSettings]);
 
     return (
         <>
             <Toast ref={toast} />
             {chatSummaries.length === 0 ?
-                <LoadChats toast={toast} setChatSummaries={setChatSummaries} />
-                : <ChatView summaries={chatSummaries} toast={toast} />}
+                <LoadChats toast={toast} setChatSummaries={setChatSummaries} globalSettings={globalSettings} changeGlobalSettings={setGlobalSettings} />
+                : <ChatView summaries={chatSummaries} toast={toast} globalSettings={globalSettings} changeGlobalSettings={setGlobalSettings} />}
         </>
     );
 }

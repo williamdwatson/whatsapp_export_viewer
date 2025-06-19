@@ -6,3 +6,30 @@
 .p-card-content {
     padding: 0;
 }
+
+.overlay {
+    position: absolute;
+    opacity: 0;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transition: background-color .5s ease, opacity .5s ease;
+    -webkit-transition: background-color .5s ease, opacity .5s ease;
+}
+
+.bulk-region {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+}
+
+.bulk-region:hover .overlay {
+    background-color: black;
+    opacity: 0.25;
+    transition: background-color .5s ease, opacity .5s ease;
+    -webkit-transition: background-color .5s ease, opacity .5s ease;
+}

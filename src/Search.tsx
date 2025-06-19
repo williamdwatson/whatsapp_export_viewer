@@ -6,8 +6,8 @@ import { FormEvent, RefObject, useEffect, useRef, useState } from "react";
 import { Toast } from "primereact/toast";
 import { AutoSizer, CellMeasurer, CellMeasurerCache, List } from "react-virtualized";
 import Chat from "./Chat";
-import { message_t } from "./types";
 import { Divider } from "primereact/divider";
+import { BulkMediaMessage, Message } from "./messages";
 
 interface SearchProps {
     /**
@@ -26,7 +26,7 @@ interface SearchProps {
     /**
      * All available messages
      */
-    messages: message_t[],
+    messages: Message[],
     /**
      * Popup reference
      */
@@ -70,7 +70,21 @@ export default function Search(props: SearchProps) {
             invoke("search", { chat: props.chat, search: searched })
                 .then(res => {
                     const resp = res as number[];
-                    setFoundIdxes(resp);
+                    const found_idxes: typeof foundIdxes = [];
+                    for (const idx of resp) {
+                        let i = props.messages.findIndex(m => m.backend_idx === idx);
+                        if (i === -1) {
+                            for (let j = 0; j < props.messages.length; j++) {
+                                const m = props.messages[j];
+                                if (m instanceof BulkMediaMessage && m.content.some(c => c.backend_idx === idx)) {
+                                    i = j;
+                                    break;
+                                }
+                            }
+                        }
+                        found_idxes.push(i);
+                    }
+                    setFoundIdxes(found_idxes);
                     setSearch(searched);
                     cache.current.clearAll();
                 })

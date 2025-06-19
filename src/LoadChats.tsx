@@ -4,12 +4,13 @@ import { Column } from "primereact/column";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
 import { DataTable } from "primereact/datatable";
 import { Dialog } from "primereact/dialog";
-import { Dropdown } from "primereact/dropdown";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getBasename } from "./utilities";
 import { invoke } from "@tauri-apps/api/core";
 import { Toast } from "primereact/toast";
-import { chat_files_t, chat_summary_t, message_t } from "./types";
+import { chat_files_t, chat_summary_t, global_settings_t, message_t } from "./types";
+import { InputText } from "primereact/inputtext";
+import { GlobalSettings } from "./Settings";
 
 
 type returned_chat_summary_t = Omit<chat_summary_t, "first_sent" | "last_sent" | "last_message">
@@ -28,6 +29,15 @@ interface LoadChatsProps {
      * Sets the chat summaries
      */
     setChatSummaries: (summaries: chat_summary_t[]) => void,
+    /**
+     * Global app settings
+     */
+    globalSettings: global_settings_t,
+    /**
+     * Changes the global app settings
+     * @param newSettings New global settings
+     */
+    changeGlobalSettings: (newSettings: global_settings_t) => void
 }
 
 /**
@@ -41,6 +51,7 @@ export function LoadChats(props: LoadChatsProps) {
     const [selectedChatName, setSelectedChatName] = useState("");
     const [editingChat, setEditingChat] = useState<chat_files_t["id"] | null>(null);
     const [loading, setLoading] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
 
     /**
      * Callback for selecting a chat text file
@@ -91,15 +102,20 @@ export function LoadChats(props: LoadChatsProps) {
     const addChat = (e: FormEvent) => {
         e.preventDefault();
         if (selectedFilePath.trim() !== "" && selectedChatName.trim() !== "") {
-            const new_chats = [...selectedFiles];
-            new_chats.push({
-                id: new_chats.length === 0 ? 1 : Math.max(...new_chats.map(c => c.id)) + 1,
-                chatFile: selectedFilePath,
-                chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
-                chatName: selectedChatName,
-            });
-            setSelectedFiles(new_chats);
-            cancelChooseChat();
+            if (!selectedFiles.some(c => c.chatName === selectedChatName.trim())) {
+                const new_chats = [...selectedFiles];
+                new_chats.push({
+                    id: new_chats.length === 0 ? 1 : Math.max(...new_chats.map(c => c.id)) + 1,
+                    chatFile: selectedFilePath,
+                    chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
+                    chatName: selectedChatName.trim(),
+                });
+                setSelectedFiles(new_chats);
+                cancelChooseChat();
+            }
+            else {
+                props.toast.current?.show({ severity: "warn", summary: "Duplicate name", detail: "A chat with this name already exists" });
+            }
         }
     }
 
@@ -108,23 +124,28 @@ export function LoadChats(props: LoadChatsProps) {
      */
     const doEditChat = (e: FormEvent) => {
         e.preventDefault();
-        if (editingChat != null && selectedFilePath.trim() !== "" && selectedChatName !== "") {
-            const new_chats: typeof selectedFiles = [];
-            for (const c of selectedFiles) {
-                if (c.id === editingChat) {
-                    new_chats.push({
-                        id: c.id,
-                        chatFile: selectedFilePath,
-                        chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
-                        chatName: selectedChatName,
-                    });
+        if (editingChat != null && selectedFilePath.trim() !== "" && selectedChatName.trim() !== "") {
+            if (!selectedFiles.some(c => c.id !== editingChat && c.chatName === selectedChatName.trim())) {
+                const new_chats: typeof selectedFiles = [];
+                for (const c of selectedFiles) {
+                    if (c.id === editingChat) {
+                        new_chats.push({
+                            id: c.id,
+                            chatFile: selectedFilePath,
+                            chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
+                            chatName: selectedChatName.trim(),
+                        });
+                    }
+                    else {
+                        new_chats.push(c);
+                    }
                 }
-                else {
-                    new_chats.push(c);
-                }
+                setSelectedFiles(new_chats);
+                cancelChooseChat();
             }
-            setSelectedFiles(new_chats);
-            cancelChooseChat();
+            else {
+                props.toast.current?.show({ severity: "warn", summary: "Duplicate name", detail: "A chat with this name already exists" });
+            }
         }
     }
 
@@ -229,16 +250,16 @@ export function LoadChats(props: LoadChatsProps) {
             <Dialog header={`${editingChat == null ? "Choose" : "Edit"} chat`} visible={showChooseChat} onHide={cancelChooseChat} dismissableMask>
                 <form onSubmit={editingChat == null ? addChat : doEditChat}>
                     <div style={{ display: "flex", alignItems: "center" }}>
-                        <Button label="Choose chat" icon="pi pi-file" onClick={chooseChat} />
+                        <Button type="button" label="Choose chat" icon="pi pi-file" onClick={chooseChat} />
                         <span style={{ marginLeft: "10px" }}>{getBasename(selectedFilePath)}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", marginTop: "15px" }}>
-                        <Button label="Choose directory" icon="pi pi-folder" onClick={chooseDirectory} />
+                        <Button type="button" label="Choose directory" icon="pi pi-folder" onClick={chooseDirectory} />
                         <span style={{ marginLeft: "10px" }}>{selectedDirectoryPath}</span>
                     </div>
                     <div style={{ marginTop: "15px" }}>
                         <label htmlFor="chat_name" style={{ marginRight: "5px" }}>Chat name:</label>
-                        <Dropdown value={selectedChatName} onChange={e => setSelectedChatName(e.value)} options={selectedFiles.map(c => c.chatName).filter(n => n !== null && n.trim() !== "")} editable emptyMessage="No other named chats" inputId="chat_name" />
+                        <InputText value={selectedChatName} onChange={e => setSelectedChatName(e.target.value)} id="chat_name" />
                     </div>
                     <div style={{ textAlign: "center", marginTop: "15px" }}>
                         {editingChat == null ?
@@ -249,6 +270,7 @@ export function LoadChats(props: LoadChatsProps) {
                     </div>
                 </form>
             </Dialog>
+            <GlobalSettings show={showSettings} setShow={setShowSettings} currentSettings={props.globalSettings} changeSettings={props.changeGlobalSettings} />
             <div style={{ display: "grid", height: "95vh", overflow: "hidden", justifyContent: "center", alignItems: "center" }}>
                 <div>
                     <DataTable value={selectedFiles} scrollable scrollHeight="70vh" emptyMessage="No chats" footer={footer}>
@@ -258,7 +280,8 @@ export function LoadChats(props: LoadChatsProps) {
                         <Column body={chatControls} />
                     </DataTable>
                     <div style={{ textAlign: "center", marginTop: "15px" }}>
-                        <Button label="Load" icon="pi pi-arrow-right" severity="success" disabled={selectedFiles.length === 0} loading={loading} onClick={load} />
+                        <Button label="Load" icon="pi pi-arrow-right" severity="success" disabled={selectedFiles.length === 0} loading={loading} onClick={load} style={{ marginRight: "5px" }} />
+                        <Button label="Settings" icon="pi pi-cog" onClick={() => setShowSettings(true)} />
                     </div>
                 </div>
             </div>

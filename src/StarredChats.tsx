@@ -1,8 +1,8 @@
 import { Dialog } from "primereact/dialog";
-import { message_t } from "./types";
 import { Button } from "primereact/button";
 import Chat from "./Chat";
 import { Divider } from "primereact/divider";
+import { Message } from "./messages";
 
 interface StarredChatProps {
     /**
@@ -17,7 +17,7 @@ interface StarredChatProps {
     /**
      * Starred messages to show
      */
-    starredMessages: message_t[],
+    starredMessages: Message[],
     /**
      * Total number of messages
      */

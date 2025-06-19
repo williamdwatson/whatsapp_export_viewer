@@ -37,7 +37,7 @@ export default function HighlightText(props: HighlightTextProps) {
     const pieces = [];
     for (const i of getNonOverlappingIndices(props.children, props.highlight)) {
         pieces.push(props.children.substring(lastIdx, i));
-        pieces.push(<span style={{ backgroundColor: "yellow" }}>{props.children.substring(i, i + props.highlight.length)}</span>)
+        pieces.push(<span style={{ backgroundColor: "goldenrod" }}>{props.children.substring(i, i + props.highlight.length)}</span>)
         lastIdx = i + props.highlight.length;
     }
     if (lastIdx !== props.children.length - 1) {
