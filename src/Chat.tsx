@@ -242,7 +242,7 @@ function BulkMediaChat(props: BulkMediaChatProps) {
             {props.message.content.map(c => {
                 return <div style={{ textAlign: "center" }} key={`popup-media-${c.path}`}>
                     <b style={{ display: "block", marginBottom: "5px" }}>{c.timestamp.toLocaleString()}</b>
-                    {c.media_type === "PHOTO" ?
+                    {c.path == null || c.path === "" ? <i>File unavailable</i> : c.media_type === "PHOTO" ?
                         <Image imageStyle={{ maxHeight: "40vh", maxWidth: "85vh" }} src={convertFileSrc(c.path)} preview />
                         : c.media_type === "VIDEO" ?
                             <video controls style={{ maxHeight: "40vh", maxWidth: "85vh" }} src={convertFileSrc(c.path)} />

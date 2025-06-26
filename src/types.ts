@@ -18,6 +18,10 @@ export type chat_files_t = {
      * Chat name, if any
      */
     chatName: string,
+    /**
+     * Whether the chat file is editable
+     */
+    editable?: boolean
 }
 
 /**

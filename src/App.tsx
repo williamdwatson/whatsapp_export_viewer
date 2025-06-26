@@ -10,9 +10,19 @@ import ChatView from "./ChatView";
 
 
 function App() {
+    const [currentPage, setCurrentPage] = useState<"load" | "view">("load");
     const [chatSummaries, setChatSummaries] = useState<chat_summary_t[]>([]);
     const [globalSettings, setGlobalSettings] = useState<global_settings_t>({ lightMode: !window.matchMedia("(prefers-color-scheme: dark)").matches });
     const toast = useRef<Toast>(null);
+
+    /**
+     * Sets the chat summaries and navigates to the chat view
+     * @param summaries New chat summaries
+     */
+    const updateChatSummaries = (summaries: chat_summary_t[]) => {
+        setChatSummaries(summaries);
+        setCurrentPage("view");
+    }
 
     useEffect(() => {
         const themeLink = document.getElementById("theme-css") as HTMLLinkElement;
@@ -24,9 +34,9 @@ function App() {
     return (
         <>
             <Toast ref={toast} />
-            {chatSummaries.length === 0 ?
-                <LoadChats toast={toast} setChatSummaries={setChatSummaries} globalSettings={globalSettings} changeGlobalSettings={setGlobalSettings} />
-                : <ChatView summaries={chatSummaries} toast={toast} globalSettings={globalSettings} changeGlobalSettings={setGlobalSettings} />}
+            {currentPage === "load" ?
+                <LoadChats toast={toast} setChatSummaries={updateChatSummaries} globalSettings={globalSettings} changeGlobalSettings={setGlobalSettings} />
+                : <ChatView summaries={chatSummaries} changeToLoad={() => setCurrentPage("load")} toast={toast} globalSettings={globalSettings} changeGlobalSettings={setGlobalSettings} />}
         </>
     );
 }

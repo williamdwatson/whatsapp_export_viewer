@@ -21,6 +21,10 @@ interface ChatViewProps {
      */
     summaries: chat_summary_t[],
     /**
+     * Function to switch to the chat loading view
+     */
+    changeToLoad: () => void,
+    /**
      * Popup toast message reference
      */
     toast: RefObject<Toast>,
@@ -264,8 +268,13 @@ export default function ChatView(props: ChatViewProps) {
                 />
                 : null}
             <Statistics show={showStatistics} setShow={setShowStatistics} stats={stats} />
-            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 10fr" }}>
-                <ListBox value={selectedChat} onChange={e => changeSelectedChat(e.value)} options={props.summaries} optionLabel="name" itemTemplate={chatTemplate} listStyle={{ height: "97vh" }} />
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 10fr" }}>
+                <div>
+                    <div style={{ textAlign: "center", width: "100%", marginBottom: "5px" }}>
+                        <Button label="Update chats" icon="pi pi-pencil" onClick={props.changeToLoad} />
+                    </div>
+                    <ListBox value={selectedChat} onChange={e => changeSelectedChat(e.value)} options={props.summaries} optionLabel="name" itemTemplate={chatTemplate} listStyle={{ height: "92vh" }} />
+                </div>
                 {selectedChat == null || loadedMessages == null ? null :
                     <div style={{ display: "flex", flexDirection: "column", height: "89vh" }}>
                         <Toolbar end={end} />
@@ -296,6 +305,7 @@ export default function ChatView(props: ChatViewProps) {
                                         </CellMeasurer>
                                     )}
                                 />
+
                             )}
                         </AutoSizer>
                     </div>}

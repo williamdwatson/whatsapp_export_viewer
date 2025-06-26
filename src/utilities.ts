@@ -40,3 +40,12 @@ export function simpleHash(str: string) {
     }
     return hash;
 }
+
+/**
+ * Calculates the sum of an array of numbers
+ * @param arr Array of numbers
+ * @returns Sum of `arr`
+ */
+export function sum(arr: number[]) {
+    return arr.reduce((prev, curr) => prev + curr, 0);
+}

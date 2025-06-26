@@ -1,4 +1,4 @@
-import { FormEvent, RefObject, useState } from "react";
+import { FormEvent, RefObject, useEffect, useState } from "react";
 import { Button } from "primereact/button";
 import { Column } from "primereact/column";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
@@ -109,6 +109,7 @@ export function LoadChats(props: LoadChatsProps) {
                     chatFile: selectedFilePath,
                     chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
                     chatName: selectedChatName.trim(),
+                    editable: true,
                 });
                 setSelectedFiles(new_chats);
                 cancelChooseChat();
@@ -134,6 +135,7 @@ export function LoadChats(props: LoadChatsProps) {
                             chatFile: selectedFilePath,
                             chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
                             chatName: selectedChatName.trim(),
+                            editable: true
                         });
                     }
                     else {
@@ -166,7 +168,7 @@ export function LoadChats(props: LoadChatsProps) {
      * @param row Row to delete
      */
     const deleteChat = (row: chat_files_t) => {
-        setSelectedFiles(prev => prev.filter((c) => c !== row));
+        invoke("remove_chat", { chat: row.chatName }).then(() => setSelectedFiles(prev => prev.filter((c) => c !== row)));
     }
 
     /**
@@ -200,21 +202,21 @@ export function LoadChats(props: LoadChatsProps) {
      */
     const load = () => {
         const file_counts = new Set<string>();
-        const used: typeof selectedFiles = [];
+        const used = new Set<string>();
         for (const c of selectedFiles) {
             if (file_counts.has(c.chatFile)) {
-                used.push(c);
+                used.add(c.chatFile);
             }
             else {
                 file_counts.add(c.chatFile);
             }
         }
-        if (used.length > 0) {
+        if (used.size > 0) {
             confirmDialog({
                 header: "Duplicate files",
                 message: <div>
-                    {`The following file${used.length === 1 ? " is" : "s are"} used in multiple chats. Do you wish to load them multiple times?`}
-                    <ul>{used.slice(0, 5).map(c => <li>{c.chatFile}</li>)}{used.length >= 5 ? <li>And {used.length - 4} more</li> : null}</ul>
+                    {`The following file${used.size === 1 ? " is" : "s are"} used in multiple chats. Do you wish to load ${used.size === 1 ? "it" : "them"} multiple times?`}
+                    <ul>{Array.from(used).slice(0, 5).map(c => <li>{c}</li>)}{used.size >= 5 ? <li>And {used.size - 4} more</li> : null}</ul>
                 </div>,
                 icon: "pi pi-question-circle",
                 accept: doLoad
@@ -232,7 +234,7 @@ export function LoadChats(props: LoadChatsProps) {
      */
     const chatControls = (row: chat_files_t) => {
         return <div>
-            <Button icon="pi pi-pencil" outlined rounded style={{ marginRight: "7px" }} onClick={() => editChat(row)} />
+            {row.editable ? <Button icon="pi pi-pencil" outlined rounded style={{ marginRight: "7px" }} onClick={() => editChat(row)} /> : null}
             <Button icon="pi pi-trash" outlined rounded severity="danger" onClick={() => deleteChat(row)} />
         </div>
     }
@@ -243,6 +245,33 @@ export function LoadChats(props: LoadChatsProps) {
     const footer = <div style={{ textAlign: "center" }}>
         <Button label="Add chat" icon="pi pi-plus" onClick={() => setShowChooseChat(true)} />
     </div>
+
+    /// Get the chats that are already loaded
+    useEffect(() => {
+        invoke("get_available_chats")
+            .then(res => {
+                const resp = res as chat_files_t[];
+                const used_ids = new Set(resp.map(r => r.id));
+                for (const f of selectedFiles) {
+                    if (used_ids.has(f.id)) {
+                        const new_id = Math.max(...used_ids);
+                        used_ids.add(new_id);
+                        resp.push({
+                            id: new_id,
+                            chatFile: f.chatFile,
+                            chatDirectory: f.chatDirectory,
+                            chatName: f.chatName,
+                            editable: true
+                        });
+                    }
+                    else {
+                        f.editable = true;
+                        resp.push(f);
+                    }
+                }
+                setSelectedFiles(resp);
+            });
+    }, []);
 
     return (
         <>

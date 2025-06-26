@@ -1,8 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::{self, File},
+    fs::{self, create_dir_all, File},
     io::{BufRead, BufReader},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering::Relaxed},
         Arc, Mutex,
@@ -10,8 +10,9 @@ use std::{
 };
 
 use chrono::{Duration, NaiveDateTime};
+use sanitise_file_name::sanitise;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 /// The export version of a WhatsApp chat
 enum ExportVersion {
@@ -30,6 +31,9 @@ const VIDEO_TYPES: [&'static str; 7] = ["mp4", "avi", "mov", "wmv", "mkv", "webm
 
 /// Common audio extensions
 const AUDIO_TYPES: [&'static str; 5] = ["opus", "mp3", "aac", "ogg", "wav"];
+
+/// Extension to use for the cached chats
+const CHAT_EXTENSION: &str = "chat";
 
 /// The type of the media
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
@@ -135,10 +139,26 @@ impl Eq for Message {}
 struct WhatsAppChat {
     /// All message of the chat in order
     messages: Vec<Message>,
+    /// Chat file
+    file: String,
     /// Resource directories, if available
     directories: Vec<String>,
     /// Chat name
     name: String,
+}
+
+/// Basic information about a chat
+#[derive(Serialize)]
+#[allow(non_snake_case)]
+struct BasicChatData {
+    /// ID of the chat
+    id: usize,
+    /// Path of the chat file
+    chatFile: String,
+    /// Directory of the chat's files, if any
+    chatDirectory: Option<String>,
+    /// Chat name
+    chatName: String,
 }
 
 /// Summary of a WhatsApp chat
@@ -284,6 +304,48 @@ impl WhatsAppChat {
         });
         return to_return;
     }
+
+    /// Saves the chat to JSON
+    /// # Parameters
+    /// * `path` - Path to which the JSON will be saved
+    fn save_chat(&self, path: PathBuf) -> Result<(), String> {
+        let mut f = fs::File::create(path).map_err(|e| e.to_string())?;
+        bincode::serde::encode_into_std_write(self, &mut f, bincode::config::standard())
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+/// Saves the specified chats
+/// # Parameters
+/// * `directory` - Directory to which the chats should be saved
+/// * `chats` - Chats to save
+fn save_chats(directory: &PathBuf, chats: &Vec<Arc<WhatsAppChat>>) -> Result<(), String> {
+    create_dir_all(directory).map_err(|err| err.to_string())?;
+    for c in chats {
+        c.save_chat(directory.join(format!("{}.{}", sanitise(&c.name), CHAT_EXTENSION)))?;
+    }
+    Ok(())
+}
+
+/// Saves basic information about the specified chats
+/// # Parameters
+/// * `directory` - Directory to which the chat information should be saved
+/// * `chats` - Chats to save
+fn save_basic_chat_data(directory: &PathBuf, chats: &Vec<Arc<WhatsAppChat>>) -> Result<(), String> {
+    create_dir_all(directory).map_err(|err| err.to_string())?;
+    let basic_data: Vec<_> = chats
+        .iter()
+        .enumerate()
+        .map(|(id, c)| BasicChatData {
+            id,
+            chatFile: c.file.clone(),
+            chatDirectory: c.directories.first().cloned(),
+            chatName: c.name.clone(),
+        })
+        .collect();
+    let f = fs::File::create(directory.join("chat_data.json")).map_err(|e| e.to_string())?;
+    serde_json::to_writer(f, &basic_data).map_err(|e| e.to_string())
 }
 
 /// Searches the messages in `chat` for the given string
@@ -736,12 +798,52 @@ fn parse_whatsapp_export(
     messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
     Ok(WhatsAppChat {
         messages,
+        file: path.to_owned(),
         directories: match directory {
             Some(d) => vec![d.clone()],
             None => Vec::new(),
         },
         name: name.to_owned(),
     })
+}
+
+/// Gets all available chats
+#[tauri::command]
+fn get_available_chats(state: State<'_, AppState>) -> Result<Vec<BasicChatData>, String> {
+    let locked_chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+
+    Ok(locked_chats
+        .iter()
+        .enumerate()
+        .map(|(id, c)| BasicChatData {
+            id,
+            chatFile: c.file.clone(),
+            chatDirectory: c.directories.first().cloned(),
+            chatName: c.name.clone(),
+        })
+        .collect())
+}
+
+/// Removes the specified chat
+/// # Parameters
+/// * `chat` - Name of the chat to remove
+#[tauri::command]
+fn remove_chat(chat: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut to_change = state.chats.lock().or(Err("Failed to get lock on state"))?;
+    *to_change = to_change
+        .iter()
+        .filter_map(|c| {
+            if c.name == chat {
+                Some(Arc::clone(c))
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(())
 }
 
 #[tauri::command]
@@ -766,6 +868,7 @@ fn get_chat(chat: String, state: State<'_, AppState>) -> Result<Arc<WhatsAppChat
 fn load_chats(
     chats: Vec<ChatToLoad>,
     state: State<'_, AppState>,
+    handle: AppHandle,
 ) -> Result<Vec<ChatSummary>, String> {
     let mut names = HashSet::with_capacity(chats.len());
     for c in chats.iter() {
@@ -773,21 +876,49 @@ fn load_chats(
             return Err(format!("Chat name {0} used more than once", c.chatName));
         }
     }
+    let mut to_change = state.chats.lock().or(Err("Failed to get lock on state"))?;
     let mut chat_summaries = Vec::new();
     let mut parsed_chats = Vec::with_capacity(chats.len());
     for c in chats {
-        let p = parse_whatsapp_export(&c.chatFile, &c.chatDirectory, &c.chatName)?;
-        chat_summaries.push(ChatSummary {
-            name: c.chatName,
-            first_sent: p.messages.iter().map(|m| m.timestamp).min(),
-            last_sent: p.messages.iter().map(|m| m.timestamp).max(),
-            last_message: p.messages.last().cloned(),
-            number_of_messages: p.messages.len(),
-            starred: Vec::new(),
-        });
-        parsed_chats.push(Arc::new(p));
+        if let Some(matching) = to_change.iter().find(|cc| cc.name == c.chatName) {
+            parsed_chats.push(Arc::clone(matching));
+            chat_summaries.push(ChatSummary {
+                name: c.chatName,
+                first_sent: matching.messages.iter().map(|m| m.timestamp).min(),
+                last_sent: matching.messages.iter().map(|m| m.timestamp).max(),
+                last_message: matching.messages.last().cloned(),
+                number_of_messages: matching.messages.len(),
+                starred: matching
+                    .messages
+                    .iter()
+                    .filter_map(|m| {
+                        if m.starred.load(Relaxed) {
+                            Some(m.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            });
+        } else {
+            let p = parse_whatsapp_export(&c.chatFile, &c.chatDirectory, &c.chatName)?;
+            chat_summaries.push(ChatSummary {
+                name: c.chatName,
+                first_sent: p.messages.iter().map(|m| m.timestamp).min(),
+                last_sent: p.messages.iter().map(|m| m.timestamp).max(),
+                last_message: p.messages.last().cloned(),
+                number_of_messages: p.messages.len(),
+                starred: Vec::new(),
+            });
+            parsed_chats.push(Arc::new(p));
+        }
     }
-    let mut to_change = state.chats.lock().or(Err("Failed to get lock on state"))?;
+    let app_data_dir = handle
+        .path()
+        .app_local_data_dir()
+        .map_err(|err| err.to_string())?;
+    let _ = save_chats(&app_data_dir, &parsed_chats);
+    let _ = save_basic_chat_data(&app_data_dir, &parsed_chats);
     *to_change = parsed_chats;
     return Ok(chat_summaries);
 }
@@ -802,6 +933,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             load_chats,
+            get_available_chats,
+            remove_chat,
             get_chat,
             search,
             star_message,
