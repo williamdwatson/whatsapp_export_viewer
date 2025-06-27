@@ -11,6 +11,7 @@ import { Toast } from "primereact/toast";
 import { chat_files_t, chat_summary_t, global_settings_t, message_t } from "./types";
 import { InputText } from "primereact/inputtext";
 import { GlobalSettings } from "./Settings";
+import { v4 as uuidv4 } from "uuid";
 
 
 type returned_chat_summary_t = Omit<chat_summary_t, "first_sent" | "last_sent" | "last_message">
@@ -102,14 +103,16 @@ export function LoadChats(props: LoadChatsProps) {
     const addChat = (e: FormEvent) => {
         e.preventDefault();
         if (selectedFilePath.trim() !== "" && selectedChatName.trim() !== "") {
-            if (!selectedFiles.some(c => c.chatName === selectedChatName.trim())) {
+            if (!selectedFiles.some(c => c.name === selectedChatName.trim())) {
                 const new_chats = [...selectedFiles];
                 new_chats.push({
-                    id: new_chats.length === 0 ? 1 : Math.max(...new_chats.map(c => c.id)) + 1,
-                    chatFile: selectedFilePath,
-                    chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
-                    chatName: selectedChatName.trim(),
+                    id: uuidv4(),
+                    file: selectedFilePath,
+                    directory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
+                    name: selectedChatName.trim(),
                     editable: true,
+                    starred: [],
+                    you: null,
                 });
                 setSelectedFiles(new_chats);
                 cancelChooseChat();
@@ -126,16 +129,18 @@ export function LoadChats(props: LoadChatsProps) {
     const doEditChat = (e: FormEvent) => {
         e.preventDefault();
         if (editingChat != null && selectedFilePath.trim() !== "" && selectedChatName.trim() !== "") {
-            if (!selectedFiles.some(c => c.id !== editingChat && c.chatName === selectedChatName.trim())) {
+            if (!selectedFiles.some(c => c.id !== editingChat && c.name === selectedChatName.trim())) {
                 const new_chats: typeof selectedFiles = [];
                 for (const c of selectedFiles) {
                     if (c.id === editingChat) {
                         new_chats.push({
                             id: c.id,
-                            chatFile: selectedFilePath,
-                            chatDirectory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
-                            chatName: selectedChatName.trim(),
-                            editable: true
+                            file: selectedFilePath,
+                            directory: selectedDirectoryPath.trim() === "" ? null : selectedDirectoryPath,
+                            name: selectedChatName.trim(),
+                            editable: true,
+                            starred: [],
+                            you: null,
                         });
                     }
                     else {
@@ -156,9 +161,9 @@ export function LoadChats(props: LoadChatsProps) {
      * @param row Row to edit
      */
     const editChat = (row: chat_files_t) => {
-        setSelectedFilePath(row.chatFile);
-        setSelectedDirectoryPath(row.chatDirectory ?? "");
-        setSelectedChatName(row.chatName ?? "");
+        setSelectedFilePath(row.file);
+        setSelectedDirectoryPath(row.directory ?? "");
+        setSelectedChatName(row.name ?? "");
         setEditingChat(row.id);
         setShowChooseChat(true);
     }
@@ -168,7 +173,7 @@ export function LoadChats(props: LoadChatsProps) {
      * @param row Row to delete
      */
     const deleteChat = (row: chat_files_t) => {
-        invoke("remove_chat", { chat: row.chatName }).then(() => setSelectedFiles(prev => prev.filter((c) => c !== row)));
+        invoke("remove_chat", { chat: row.name }).then(() => setSelectedFiles(prev => prev.filter((c) => c !== row)));
     }
 
     /**
@@ -184,12 +189,10 @@ export function LoadChats(props: LoadChatsProps) {
                     const last = summary.last_sent == null ? null : new Date(summary.last_sent);
                     const message = summary.last_message == null ? null : { ...summary.last_message, timestamp: new Date(summary.last_message.timestamp) };
                     return {
-                        name: summary.name,
+                        ...summary,
                         first_sent: first,
                         last_sent: last,
                         last_message: message,
-                        number_of_messages: summary.number_of_messages,
-                        starred: summary.starred,
                     };
                 }))
             })
@@ -204,11 +207,11 @@ export function LoadChats(props: LoadChatsProps) {
         const file_counts = new Set<string>();
         const used = new Set<string>();
         for (const c of selectedFiles) {
-            if (file_counts.has(c.chatFile)) {
-                used.add(c.chatFile);
+            if (file_counts.has(c.file)) {
+                used.add(c.file);
             }
             else {
-                file_counts.add(c.chatFile);
+                file_counts.add(c.file);
             }
         }
         if (used.size > 0) {
@@ -234,8 +237,8 @@ export function LoadChats(props: LoadChatsProps) {
      */
     const chatControls = (row: chat_files_t) => {
         return <div>
-            {row.editable ? <Button icon="pi pi-pencil" outlined rounded style={{ marginRight: "7px" }} onClick={() => editChat(row)} /> : null}
-            <Button icon="pi pi-trash" outlined rounded severity="danger" onClick={() => deleteChat(row)} />
+            {row.editable ? <Button icon="pi pi-pencil" outlined rounded style={{ marginRight: "7px" }} onClick={() => editChat(row)} tooltip="Edit" tooltipOptions={{ position: "bottom", showDelay: 300 }} /> : null}
+            <Button icon="pi pi-minus-circle" outlined rounded severity="danger" onClick={() => deleteChat(row)} tooltip="Remove" tooltipOptions={{ position: "right", showDelay: 300 }} />
         </div>
     }
 
@@ -248,28 +251,15 @@ export function LoadChats(props: LoadChatsProps) {
 
     /// Get the chats that are already loaded
     useEffect(() => {
-        invoke("get_available_chats")
-            .then(res => {
-                const resp = res as chat_files_t[];
-                const used_ids = new Set(resp.map(r => r.id));
-                for (const f of selectedFiles) {
-                    if (used_ids.has(f.id)) {
-                        const new_id = Math.max(...used_ids);
-                        used_ids.add(new_id);
-                        resp.push({
-                            id: new_id,
-                            chatFile: f.chatFile,
-                            chatDirectory: f.chatDirectory,
-                            chatName: f.chatName,
-                            editable: true
-                        });
-                    }
-                    else {
-                        f.editable = true;
-                        resp.push(f);
-                    }
-                }
-                setSelectedFiles(resp);
+        invoke("get_saved_chats")
+            .then((res) => {
+                console.log(res);
+                setSelectedFiles((res as { chats: chat_files_t[] }).chats);
+            });
+        invoke("get_set_theme", { "theme": window.matchMedia("(prefers-color-scheme: dark)").matches ? "DARK" : "LIGHT" })
+            .then((res) => {
+                const resp = res as "LIGHT" | "DARK" | "UNSPECIFIED";
+                props.changeGlobalSettings({ lightMode: resp !== "DARK" });
             });
     }, []);
 
@@ -303,9 +293,9 @@ export function LoadChats(props: LoadChatsProps) {
             <div style={{ display: "grid", height: "95vh", overflow: "hidden", justifyContent: "center", alignItems: "center" }}>
                 <div>
                     <DataTable value={selectedFiles} scrollable scrollHeight="70vh" emptyMessage="No chats" footer={footer}>
-                        <Column header="Chat file" field="chatFile" body={row => getBasename(row.chatFile)} sortable />
-                        <Column header="Resource directory" field="chatDirectory" body={row => row.chatDirectory == null ? <i>Not selected</i> : row.chatDirectory} sortable />
-                        <Column header="Chat name" field="chatName" body={row => row.chatName == null ? <i>None</i> : row.chatName} sortable />
+                        <Column header="Chat file" field="file" body={row => getBasename(row.file)} sortable />
+                        <Column header="Resource directory" field="directory" body={row => row.directory == null ? <i>Not selected</i> : row.directory} sortable />
+                        <Column header="Chat name" field="name" body={row => row.name == null ? <i>None</i> : row.name} sortable />
                         <Column body={chatControls} />
                     </DataTable>
                     <div style={{ textAlign: "center", marginTop: "15px" }}>

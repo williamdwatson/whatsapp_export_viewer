@@ -3,25 +3,33 @@
  */
 export type chat_files_t = {
     /**
-     * Unique chat ID
+     * Unique chat UUID
      */
-    id: number,
+    id: string,
     /**
      * Chat text file
      */
-    chatFile: string,
+    file: string,
     /**
      * Optional chat resource directory
      */
-    chatDirectory: string | null,
+    directory: string | null,
     /**
      * Chat name, if any
      */
-    chatName: string,
+    name: string,
     /**
      * Whether the chat file is editable
      */
-    editable?: boolean
+    editable?: boolean,
+    /**
+     * Indices of the starred messages
+     */
+    starred: number[],
+    /**
+     * Sender considered to be "you"
+     */
+    you: string | null
 }
 
 /**
@@ -105,6 +113,10 @@ export type media_message_t = Omit<message_t, "content"> & { content: media_cont
  * A summary of a WhatsApp chat
  */
 export type chat_summary_t = {
+    /**
+     * Warnings when loading the chat
+     */
+    warnings: string[],
     /**
      * Chat name
      */

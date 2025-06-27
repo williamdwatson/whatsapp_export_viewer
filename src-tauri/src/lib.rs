@@ -10,9 +10,20 @@ use std::{
 };
 
 use chrono::{Duration, NaiveDateTime};
-use sanitise_file_name::sanitise;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use uuid::Uuid;
+
+/// App theme
+#[derive(Serialize, Deserialize, Copy, Clone)]
+enum Theme {
+    /// Light theme
+    LIGHT,
+    /// Dark theme
+    DARK,
+    /// Unspecified theme
+    UNSPECIFIED,
+}
 
 /// The export version of a WhatsApp chat
 enum ExportVersion {
@@ -21,19 +32,19 @@ enum ExportVersion {
 }
 
 /// Common photo extensions
-const PHOTO_TYPES: [&'static str; 15] = [
+const PHOTO_TYPES: [&str; 15] = [
     "png", "apng", "jpg", "jpeg", "gif", "webp", "avif", "jfif", "pjpeg", "pjp", "svg", "bmp",
     "ico", "tif", "tiff",
 ];
 
 /// Common video extensions
-const VIDEO_TYPES: [&'static str; 7] = ["mp4", "avi", "mov", "wmv", "mkv", "webm", "flv"];
+const VIDEO_TYPES: [&str; 7] = ["mp4", "avi", "mov", "wmv", "mkv", "webm", "flv"];
 
 /// Common audio extensions
-const AUDIO_TYPES: [&'static str; 5] = ["opus", "mp3", "aac", "ogg", "wav"];
+const AUDIO_TYPES: [&str; 5] = ["opus", "mp3", "aac", "ogg", "wav"];
 
 /// Extension to use for the cached chats
-const CHAT_EXTENSION: &str = "chat";
+const SAVE_NAME: &str = "chat_data.json";
 
 /// The type of the media
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
@@ -137,6 +148,8 @@ impl Eq for Message {}
 /// A WhatsApp chat parsed from an export file
 #[derive(Clone, Serialize)]
 struct WhatsAppChat {
+    /// Unique identifier of the chat
+    id: Uuid,
     /// All message of the chat in order
     messages: Vec<Message>,
     /// Chat file
@@ -145,25 +158,41 @@ struct WhatsAppChat {
     directories: Vec<String>,
     /// Chat name
     name: String,
+    /// Which message sender is considered to be "you"
+    you: Arc<Mutex<Option<String>>>,
 }
 
 /// Basic information about a chat
-#[derive(Serialize)]
-#[allow(non_snake_case)]
-struct BasicChatData {
-    /// ID of the chat
-    id: usize,
+#[derive(Serialize, Deserialize)]
+struct SavedChats {
+    /// Program theme
+    theme: Theme,
+    /// Saved chats
+    chats: Vec<BasicChatDataWithStars>,
+}
+
+/// Basic information chat a chat, including starred messages
+#[derive(Serialize, Deserialize)]
+struct BasicChatDataWithStars {
+    /// UUIID of the chat
+    id: Uuid,
     /// Path of the chat file
-    chatFile: String,
+    file: String,
     /// Directory of the chat's files, if any
-    chatDirectory: Option<String>,
+    directory: Option<String>,
     /// Chat name
-    chatName: String,
+    name: String,
+    /// Starred message indices
+    starred: Vec<usize>,
+    /// Sender to mark as "you"
+    you: Option<String>,
 }
 
 /// Summary of a WhatsApp chat
 #[derive(Serialize)]
 struct ChatSummary {
+    /// Warnings when the chat was loaded
+    warnings: Vec<String>,
     /// Chat name
     name: String,
     /// When the first message was sent; this is only `None` if no messages were sent
@@ -207,20 +236,32 @@ struct MediaTypeCount {
 #[allow(non_snake_case)]
 struct ChatToLoad {
     /// Unique chat ID
-    #[allow(dead_code)]
-    id: u64,
+    id: Uuid,
     /// Chat file path
-    chatFile: String,
+    file: String,
     /// Chat resource directory path
-    chatDirectory: Option<String>,
+    directory: Option<String>,
     /// Chat name
-    chatName: String,
+    name: String,
+    /// Indices of the starred messages
+    starred: Vec<usize>,
+    /// Which sender is "you"
+    you: Option<String>,
+}
+
+struct ParsedWhatsAppChat {
+    /// Warning messages during loading
+    warnings: Vec<String>,
+    /// Parsed chat
+    chat: WhatsAppChat,
 }
 
 /// Maintains the app state
 struct AppState {
     /// Mapping of chat names to chat objects
     chats: Mutex<Vec<Arc<WhatsAppChat>>>,
+    /// App theme
+    theme: Mutex<Theme>,
 }
 
 impl WhatsAppChat {
@@ -304,48 +345,54 @@ impl WhatsAppChat {
         });
         return to_return;
     }
-
-    /// Saves the chat to JSON
-    /// # Parameters
-    /// * `path` - Path to which the JSON will be saved
-    fn save_chat(&self, path: PathBuf) -> Result<(), String> {
-        let mut f = fs::File::create(path).map_err(|e| e.to_string())?;
-        bincode::serde::encode_into_std_write(self, &mut f, bincode::config::standard())
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-}
-
-/// Saves the specified chats
-/// # Parameters
-/// * `directory` - Directory to which the chats should be saved
-/// * `chats` - Chats to save
-fn save_chats(directory: &PathBuf, chats: &Vec<Arc<WhatsAppChat>>) -> Result<(), String> {
-    create_dir_all(directory).map_err(|err| err.to_string())?;
-    for c in chats {
-        c.save_chat(directory.join(format!("{}.{}", sanitise(&c.name), CHAT_EXTENSION)))?;
-    }
-    Ok(())
 }
 
 /// Saves basic information about the specified chats
 /// # Parameters
 /// * `directory` - Directory to which the chat information should be saved
 /// * `chats` - Chats to save
-fn save_basic_chat_data(directory: &PathBuf, chats: &Vec<Arc<WhatsAppChat>>) -> Result<(), String> {
+fn save_basic_chat_data(
+    directory: &PathBuf,
+    chats: &Vec<Arc<WhatsAppChat>>,
+    theme: Theme,
+) -> Result<(), String> {
     create_dir_all(directory).map_err(|err| err.to_string())?;
-    let basic_data: Vec<_> = chats
-        .iter()
-        .enumerate()
-        .map(|(id, c)| BasicChatData {
-            id,
-            chatFile: c.file.clone(),
-            chatDirectory: c.directories.first().cloned(),
-            chatName: c.name.clone(),
+    let mut basic_data = Vec::with_capacity(chats.len());
+    for c in chats {
+        let you = c
+            .you
+            .lock()
+            .or(Err("Failed to get lock on state".to_owned()))?
+            .clone();
+        basic_data.push(BasicChatDataWithStars {
+            id: c.id,
+            file: c.file.clone(),
+            directory: c.directories.first().cloned(),
+            name: c.name.clone(),
+            starred: c
+                .messages
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, m)| {
+                    if m.starred.load(Relaxed) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            you,
         })
-        .collect();
-    let f = fs::File::create(directory.join("chat_data.json")).map_err(|e| e.to_string())?;
-    serde_json::to_writer(f, &basic_data).map_err(|e| e.to_string())
+    }
+    let f = fs::File::create(directory.join(SAVE_NAME)).map_err(|e| e.to_string())?;
+    serde_json::to_writer(
+        f,
+        &SavedChats {
+            theme,
+            chats: basic_data,
+        },
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Searches the messages in `chat` for the given string
@@ -385,9 +432,18 @@ fn search(chat: String, search: String, state: State<'_, AppState>) -> Result<Ve
 /// * `messageIdx` - Index of the message of interest
 #[tauri::command]
 #[allow(non_snake_case)]
-fn star_message(chat: String, messageIdx: usize, state: State<'_, AppState>) -> Result<(), String> {
+fn star_message(
+    chat: String,
+    messageIdx: usize,
+    state: State<'_, AppState>,
+    handle: AppHandle,
+) -> Result<(), String> {
     let locked_chats = state
         .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    let theme = state
+        .theme
         .lock()
         .or(Err("Failed to get lock on state".to_owned()))?;
     for c in locked_chats.iter() {
@@ -396,6 +452,11 @@ fn star_message(chat: String, messageIdx: usize, state: State<'_, AppState>) -> 
                 return Err("No message exists at that index".to_owned());
             }
             c.messages[messageIdx].starred.fetch_not(Relaxed);
+            let app_data_dir = handle
+                .path()
+                .app_local_data_dir()
+                .map_err(|err| err.to_string())?;
+            let _ = save_basic_chat_data(&app_data_dir, &locked_chats, *theme);
             return Ok(());
         }
     }
@@ -463,7 +524,10 @@ fn parse_whatsapp_export(
     path: &str,
     directory: &Option<String>,
     name: &str,
-) -> Result<WhatsAppChat, String> {
+    id: &Uuid,
+    starred: &Vec<usize>,
+    you: &Option<String>,
+) -> Result<ParsedWhatsAppChat, String> {
     let file = File::open(path).or(Err("Error opening file"))?;
     let reader: BufReader<File> = BufReader::new(file);
     let mut first = true;
@@ -471,6 +535,7 @@ fn parse_whatsapp_export(
     let mut messages: Vec<Message> = Vec::new();
     let mut senders: HashSet<String> = HashSet::with_capacity(2);
     let mut directory_files = HashSet::new();
+    let mut warnings = Vec::new();
     match directory {
         Some(dir) => match fs::read_dir(dir) {
             Ok(paths) => {
@@ -796,35 +861,41 @@ fn parse_whatsapp_export(
         messages[idx] = new_messages;
     }
     messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-    Ok(WhatsAppChat {
-        messages,
-        file: path.to_owned(),
-        directories: match directory {
-            Some(d) => vec![d.clone()],
-            None => Vec::new(),
+    for idx in starred {
+        if let Some(m) = messages.get(*idx) {
+            m.starred.store(true, Relaxed);
+        } else {
+            warnings.push(
+                "Some starred indices not found; these messages have not been stared.".to_owned(),
+            );
+        }
+    }
+    Ok(ParsedWhatsAppChat {
+        warnings,
+        chat: WhatsAppChat {
+            id: *id,
+            messages,
+            file: path.to_owned(),
+            directories: match directory {
+                Some(d) => vec![d.clone()],
+                None => Vec::new(),
+            },
+            name: name.to_owned(),
+            you: Arc::new(Mutex::new(you.clone())),
         },
-        name: name.to_owned(),
     })
 }
 
-/// Gets all available chats
+/// Gets information about the saved chats
 #[tauri::command]
-fn get_available_chats(state: State<'_, AppState>) -> Result<Vec<BasicChatData>, String> {
-    let locked_chats = state
-        .chats
-        .lock()
-        .or(Err("Failed to get lock on state".to_owned()))?;
-
-    Ok(locked_chats
-        .iter()
-        .enumerate()
-        .map(|(id, c)| BasicChatData {
-            id,
-            chatFile: c.file.clone(),
-            chatDirectory: c.directories.first().cloned(),
-            chatName: c.name.clone(),
-        })
-        .collect())
+fn get_saved_chats(handle: AppHandle) -> Result<SavedChats, String> {
+    let app_data_dir = handle
+        .path()
+        .app_local_data_dir()
+        .map_err(|err| err.to_string())?;
+    let data = fs::read_to_string(app_data_dir.join(SAVE_NAME)).map_err(|e| e.to_string())?;
+    let data = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    Ok(data)
 }
 
 /// Removes the specified chat
@@ -872,18 +943,19 @@ fn load_chats(
 ) -> Result<Vec<ChatSummary>, String> {
     let mut names = HashSet::with_capacity(chats.len());
     for c in chats.iter() {
-        if !names.insert(&c.chatName) {
-            return Err(format!("Chat name {0} used more than once", c.chatName));
+        if !names.insert(&c.name) {
+            return Err(format!("Chat name {0} used more than once", c.name));
         }
     }
     let mut to_change = state.chats.lock().or(Err("Failed to get lock on state"))?;
     let mut chat_summaries = Vec::new();
     let mut parsed_chats = Vec::with_capacity(chats.len());
     for c in chats {
-        if let Some(matching) = to_change.iter().find(|cc| cc.name == c.chatName) {
+        if let Some(matching) = to_change.iter().find(|cc| cc.id == c.id) {
             parsed_chats.push(Arc::clone(matching));
             chat_summaries.push(ChatSummary {
-                name: c.chatName,
+                warnings: Vec::new(),
+                name: c.name,
                 first_sent: matching.messages.iter().map(|m| m.timestamp).min(),
                 last_sent: matching.messages.iter().map(|m| m.timestamp).max(),
                 last_message: matching.messages.last().cloned(),
@@ -901,26 +973,49 @@ fn load_chats(
                     .collect(),
             });
         } else {
-            let p = parse_whatsapp_export(&c.chatFile, &c.chatDirectory, &c.chatName)?;
+            let p =
+                parse_whatsapp_export(&c.file, &c.directory, &c.name, &c.id, &c.starred, &c.you)?;
             chat_summaries.push(ChatSummary {
-                name: c.chatName,
-                first_sent: p.messages.iter().map(|m| m.timestamp).min(),
-                last_sent: p.messages.iter().map(|m| m.timestamp).max(),
-                last_message: p.messages.last().cloned(),
-                number_of_messages: p.messages.len(),
+                warnings: p.warnings,
+                name: c.name,
+                first_sent: p.chat.messages.iter().map(|m| m.timestamp).min(),
+                last_sent: p.chat.messages.iter().map(|m| m.timestamp).max(),
+                last_message: p.chat.messages.last().cloned(),
+                number_of_messages: p.chat.messages.len(),
                 starred: Vec::new(),
             });
-            parsed_chats.push(Arc::new(p));
+            parsed_chats.push(Arc::new(p.chat));
         }
     }
     let app_data_dir = handle
         .path()
         .app_local_data_dir()
         .map_err(|err| err.to_string())?;
-    let _ = save_chats(&app_data_dir, &parsed_chats);
-    let _ = save_basic_chat_data(&app_data_dir, &parsed_chats);
+    let theme = state
+        .theme
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    let _ = save_basic_chat_data(&app_data_dir, &parsed_chats, *theme);
     *to_change = parsed_chats;
     return Ok(chat_summaries);
+}
+
+/// Gets the current theme, and sets it to the supplied theme if it's currently `UNSPECIFIED`
+/// # Parameters
+/// * `theme` - Theme to use if one isn't already saved
+#[tauri::command]
+fn get_set_theme(theme: Theme, state: State<'_, AppState>) -> Result<Theme, String> {
+    let mut saved_theme = state
+        .theme
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    match *saved_theme {
+        Theme::UNSPECIFIED => {
+            *saved_theme = theme;
+            Ok(theme)
+        }
+        _ => Ok(*saved_theme),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -930,10 +1025,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             chats: Vec::new().into(),
+            theme: Theme::UNSPECIFIED.into(),
         })
         .invoke_handler(tauri::generate_handler![
+            get_set_theme,
             load_chats,
-            get_available_chats,
+            get_saved_chats,
             remove_chat,
             get_chat,
             search,
