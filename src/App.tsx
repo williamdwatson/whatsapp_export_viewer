@@ -7,6 +7,7 @@ import { LoadChats } from "./LoadChats";
 import { Toast } from "primereact/toast";
 import { chat_summary_t, global_settings_t } from "./types";
 import ChatView from "./ChatView";
+import { invoke } from "@tauri-apps/api/core";
 
 
 function App() {
@@ -24,11 +25,13 @@ function App() {
         setCurrentPage("view");
     }
 
+    // Callback whenever the global settings (i.e. the theme) changes
     useEffect(() => {
         const themeLink = document.getElementById("theme-css") as HTMLLinkElement;
         if (themeLink) {
             themeLink.href = `themes/${globalSettings.lightMode ? "light" : "dark"}_theme.css`;
         }
+        invoke("set_theme", { theme: !globalSettings.lightMode ? "DARK" : "LIGHT" });
     }, [globalSettings]);
 
     return (

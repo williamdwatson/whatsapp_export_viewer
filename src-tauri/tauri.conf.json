@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "whatsapp_export_viewer",
   "version": "0.1.0",
-  "identifier": "com.whatsapp_export_viewer.app",
+  "identifier": "com.whatsapp-export-viewer.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

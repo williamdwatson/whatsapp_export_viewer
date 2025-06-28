@@ -205,6 +205,8 @@ struct ChatSummary {
     number_of_messages: usize,
     /// Starred messages
     starred: Vec<Message>,
+    /// Which sender is considered "you"
+    you: Option<String>,
 }
 
 /// Count of each message type
@@ -382,7 +384,7 @@ fn save_basic_chat_data(
                 })
                 .collect(),
             you,
-        })
+        });
     }
     let f = fs::File::create(directory.join(SAVE_NAME)).map_err(|e| e.to_string())?;
     serde_json::to_writer(
@@ -500,7 +502,7 @@ fn get_stats(
             return Ok(c.count_by_sender());
         }
     }
-    return Err("Failed to find chat".to_owned());
+    Err("Failed to find chat".to_owned())
 }
 
 /// Searches `directory` for a file named `path`; if one is found, the full string path
@@ -952,6 +954,7 @@ fn load_chats(
     let mut parsed_chats = Vec::with_capacity(chats.len());
     for c in chats {
         if let Some(matching) = to_change.iter().find(|cc| cc.id == c.id) {
+            let you = matching.you.lock().or(Err("Failed to get lock on you"))?;
             parsed_chats.push(Arc::clone(matching));
             chat_summaries.push(ChatSummary {
                 warnings: Vec::new(),
@@ -971,6 +974,7 @@ fn load_chats(
                         }
                     })
                     .collect(),
+                you: you.clone(),
             });
         } else {
             let p =
@@ -983,6 +987,7 @@ fn load_chats(
                 last_message: p.chat.messages.last().cloned(),
                 number_of_messages: p.chat.messages.len(),
                 starred: Vec::new(),
+                you: c.you,
             });
             parsed_chats.push(Arc::new(p.chat));
         }
@@ -1000,21 +1005,110 @@ fn load_chats(
     return Ok(chat_summaries);
 }
 
-/// Gets the current theme, and sets it to the supplied theme if it's currently `UNSPECIFIED`
+/// Sets the "you" of the specified chat
 /// # Parameters
-/// * `theme` - Theme to use if one isn't already saved
+/// * `chat` - Name of the chat
+/// * `you` - Name of the sender, if any
 #[tauri::command]
-fn get_set_theme(theme: Theme, state: State<'_, AppState>) -> Result<Theme, String> {
+fn set_you(
+    chat: String,
+    you: Option<String>,
+    state: State<'_, AppState>,
+    handle: AppHandle,
+) -> Result<(), String> {
+    let chats = state
+        .chats
+        .lock()
+        .or(Err("Failed to get lock on state".to_owned()))?;
+    for c in chats.iter() {
+        if c.name == chat {
+            // This needs to be in a separate closure to prevent `save_basic_chat_data` from deadlocking
+            {
+                let mut chat_you = c
+                    .you
+                    .lock()
+                    .or(Err("Failed to get lock on state".to_owned()))?;
+                *chat_you = you;
+            }
+            let theme = *state
+                .theme
+                .lock()
+                .or(Err("Failed to get lock on state".to_owned()))?;
+            let app_data_dir = handle
+                .path()
+                .app_local_data_dir()
+                .map_err(|err| err.to_string())?;
+            return save_basic_chat_data(&app_data_dir, &chats, theme);
+        }
+    }
+    Err("Failed to find chat".to_owned())
+}
+
+/// Sets the current theme
+/// # Parameters
+/// * `theme` - Theme to use
+#[tauri::command]
+fn set_theme(theme: Theme, state: State<'_, AppState>, handle: AppHandle) -> Result<(), String> {
     let mut saved_theme = state
         .theme
         .lock()
         .or(Err("Failed to get lock on state".to_owned()))?;
-    match *saved_theme {
+    *saved_theme = theme;
+    let app_data_dir = handle
+        .path()
+        .app_local_data_dir()
+        .map_err(|err| err.to_string())?;
+    if let Ok(data) = fs::read_to_string(app_data_dir.join(SAVE_NAME)) {
+        let saved: Result<SavedChats, _> = serde_json::from_str(&data);
+        match saved {
+            Ok(s) => {
+                let f =
+                    fs::File::create(app_data_dir.join(SAVE_NAME)).map_err(|e| e.to_string())?;
+                return serde_json::to_writer(
+                    f,
+                    &SavedChats {
+                        theme,
+                        chats: s.chats,
+                    },
+                )
+                .map_err(|e| e.to_string());
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Gets the current theme, and sets it to the supplied theme if it's currently `UNSPECIFIED`
+/// # Parameters
+/// * `theme` - Theme to use if one isn't already saved
+#[tauri::command]
+fn get_set_theme_initial(
+    theme: Theme,
+    state: State<'_, AppState>,
+    handle: AppHandle,
+) -> Result<Theme, String> {
+    let mut current_theme = Theme::UNSPECIFIED;
+    if let Ok(app_data_dir) = handle.path().app_local_data_dir() {
+        if let Ok(data) = fs::read_to_string(app_data_dir.join(SAVE_NAME)) {
+            let saved: Result<SavedChats, _> = serde_json::from_str(&data);
+            current_theme = match saved {
+                Ok(s) => s.theme,
+                _ => Theme::UNSPECIFIED,
+            }
+        }
+    }
+
+    match current_theme {
         Theme::UNSPECIFIED => {
+            let mut saved_theme = state
+                .theme
+                .lock()
+                .or(Err("Failed to get lock on state".to_owned()))?;
             *saved_theme = theme;
             Ok(theme)
         }
-        _ => Ok(*saved_theme),
+        _ => Ok(current_theme),
     }
 }
 
@@ -1028,7 +1122,9 @@ pub fn run() {
             theme: Theme::UNSPECIFIED.into(),
         })
         .invoke_handler(tauri::generate_handler![
-            get_set_theme,
+            get_set_theme_initial,
+            set_theme,
+            set_you,
             load_chats,
             get_saved_chats,
             remove_chat,

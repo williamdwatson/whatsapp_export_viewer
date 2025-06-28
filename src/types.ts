@@ -140,7 +140,11 @@ export type chat_summary_t = {
     /**
      * Starred messages
      */
-    starred: message_t[]
+    starred: message_t[],
+    /**
+     * Which sender is considered "you"
+     */
+    you: string | null,
 }
 
 /**

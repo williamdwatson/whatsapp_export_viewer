@@ -1,4 +1,4 @@
-import { RefObject, useRef, useState } from "react";
+import { RefObject, useEffect, useRef, useState } from "react";
 import { ListBox } from "primereact/listbox";
 import { chat_settings_t, chat_summary_t, global_settings_t, media_content_t, media_t, returned_chat_t, statistics_t, system_content_t, text_content_t } from "./types";
 import { getMessageType } from "./utilities";
@@ -229,6 +229,9 @@ export default function ChatView(props: ChatViewProps) {
         }
     }
 
+    /**
+     * Loads the chat's statistics
+     */
     const loadStats = () => {
         if (selectedChat != null) {
             invoke("get_stats", { chat: selectedChat.name })
@@ -238,8 +241,17 @@ export default function ChatView(props: ChatViewProps) {
                 })
                 .catch(err => props.toast.current?.show({ severity: "error", summary: "Error getting statistics", detail: err }));
         }
-
     }
+
+    // Update "you" for each chat when summaries are recieved
+    useEffect(() => {
+        const settings = { ...currentSettings };
+        for (const summary of props.summaries) {
+            console.log(settings, summary);
+            settings[summary.name] = { ...settings[summary.name], you: summary.you };
+        }
+        setCurrentSettings(settings);
+    }, [props.summaries]);
 
     const end = <div>
         <Button type="button" icon="pi pi-search" rounded onClick={() => setShowSearch(true)} disabled={selectedChat == null} />
@@ -263,6 +275,7 @@ export default function ChatView(props: ChatViewProps) {
                         const current_settings = { ...currentSettings };
                         current_settings[selectedChat.name] = c;
                         setCurrentSettings(current_settings);
+                        invoke("set_you", { chat: selectedChat.name, you: c.you });
                         props.changeGlobalSettings(g);
                     }}
                 />

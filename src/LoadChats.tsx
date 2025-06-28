@@ -184,6 +184,7 @@ export function LoadChats(props: LoadChatsProps) {
         invoke("load_chats", { chats: selectedFiles })
             .then(res => {
                 const resp = res as returned_chat_summary_t[];
+                console.log(resp);
                 props.setChatSummaries(resp.map(summary => {
                     const first = summary.first_sent == null ? null : new Date(summary.first_sent);
                     const last = summary.last_sent == null ? null : new Date(summary.last_sent);
@@ -249,14 +250,14 @@ export function LoadChats(props: LoadChatsProps) {
         <Button label="Add chat" icon="pi pi-plus" onClick={() => setShowChooseChat(true)} />
     </div>
 
-    /// Get the chats that are already loaded
+    // Get the chats that are already loaded
     useEffect(() => {
         invoke("get_saved_chats")
             .then((res) => {
                 console.log(res);
                 setSelectedFiles((res as { chats: chat_files_t[] }).chats);
             });
-        invoke("get_set_theme", { "theme": window.matchMedia("(prefers-color-scheme: dark)").matches ? "DARK" : "LIGHT" })
+        invoke("get_set_theme_initial", { "theme": window.matchMedia("(prefers-color-scheme: dark)").matches ? "DARK" : "LIGHT" })
             .then((res) => {
                 const resp = res as "LIGHT" | "DARK" | "UNSPECIFIED";
                 props.changeGlobalSettings({ lightMode: resp !== "DARK" });
