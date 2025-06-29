@@ -247,7 +247,6 @@ export default function ChatView(props: ChatViewProps) {
     useEffect(() => {
         const settings = { ...currentSettings };
         for (const summary of props.summaries) {
-            console.log(settings, summary);
             settings[summary.name] = { ...settings[summary.name], you: summary.you };
         }
         setCurrentSettings(settings);

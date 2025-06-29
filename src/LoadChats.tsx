@@ -184,7 +184,6 @@ export function LoadChats(props: LoadChatsProps) {
         invoke("load_chats", { chats: selectedFiles })
             .then(res => {
                 const resp = res as returned_chat_summary_t[];
-                console.log(resp);
                 props.setChatSummaries(resp.map(summary => {
                     const first = summary.first_sent == null ? null : new Date(summary.first_sent);
                     const last = summary.last_sent == null ? null : new Date(summary.last_sent);
@@ -254,7 +253,6 @@ export function LoadChats(props: LoadChatsProps) {
     useEffect(() => {
         invoke("get_saved_chats")
             .then((res) => {
-                console.log(res);
                 setSelectedFiles((res as { chats: chat_files_t[] }).chats);
             });
         invoke("get_set_theme_initial", { "theme": window.matchMedia("(prefers-color-scheme: dark)").matches ? "DARK" : "LIGHT" })

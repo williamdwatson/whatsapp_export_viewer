@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 
 import "./App.css";
