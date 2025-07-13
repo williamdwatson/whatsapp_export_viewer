@@ -73,20 +73,20 @@ export function ChatSettings(props: ChatSettingsProps) {
 
     return <Dialog header="Settings" visible={props.show} onHide={cancel} dismissableMask>
         <form onSubmit={submit} onReset={reset}>
-            <h2 style={{ textAlign: "center" }}>Chat settings</h2>
+            <h2 className="text-center">Chat settings</h2>
             <div style={{ textAlign: "center", marginTop: "5px" }}>
-                <label htmlFor="you" style={{ marginRight: "5px" }}>You:</label>
+                <label htmlFor="you" className="right-pad">You:</label>
                 <Dropdown value={you} onChange={e => setYou(e.value)} options={Array.from(props.senders)} inputId="you" />
             </div>
-            <h2 style={{ textAlign: "center" }}>Global settings</h2>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginTop: "10px" }}>
+            <h2 className="text-center">Global settings</h2>
+            <div className="flex-align-center settings-form">
                 <span style={{ marginRight: "5px", cursor: "pointer" }} aria-label="Dark mode" onClick={() => setLightMode(false)}>Dark</span>
-                <InputSwitch checked={lightMode} onChange={e => setLightMode(e.value)} style={{ marginRight: "5px" }} />
+                <InputSwitch checked={lightMode} onChange={e => setLightMode(e.value)} className="right-pad" />
                 <span style={{ cursor: "pointer" }} aria-label="Light mode" onClick={() => setLightMode(true)}>Light</span>
             </div>
             <div style={{ textAlign: "center", marginTop: "15px" }}>
-                <Button label="Save" icon="pi pi-save" severity="success" type="submit" style={{ marginRight: "5px" }} />
-                <Button label="Reset" icon="pi pi-refresh" severity="warning" type="reset" style={{ marginRight: "5px" }} />
+                <Button label="Save" icon="pi pi-save" severity="success" type="submit" className="right-pad" />
+                <Button label="Reset" icon="pi pi-refresh" severity="warning" type="reset" className="right-pad" />
                 <Button label="Cancel" icon="pi pi-times" severity="secondary" outlined type="button" onClick={cancel} />
             </div>
         </form>
@@ -150,14 +150,14 @@ export function GlobalSettings(props: GlobalSettingsProps) {
 
     return <Dialog header="Settings" visible={props.show} onHide={cancel} dismissableMask>
         <form onSubmit={submit} onReset={reset}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginTop: "10px" }}>
+            <div className="flex-align-center settings-form">
                 <span style={{ marginRight: "5px", cursor: "pointer" }} aria-label="Dark mode" onClick={() => setLightMode(false)}>Dark</span>
-                <InputSwitch checked={lightMode} onChange={e => setLightMode(e.value)} style={{ marginRight: "5px" }} />
+                <InputSwitch checked={lightMode} onChange={e => setLightMode(e.value)} className="right-pad" />
                 <span style={{ cursor: "pointer" }} aria-label="Light mode" onClick={() => setLightMode(true)}>Light</span>
             </div>
             <div style={{ textAlign: "center", marginTop: "15px" }}>
-                <Button label="Save" icon="pi pi-save" severity="success" type="submit" style={{ marginRight: "5px" }} />
-                <Button label="Reset" icon="pi pi-refresh" severity="warning" type="reset" style={{ marginRight: "5px" }} />
+                <Button label="Save" icon="pi pi-save" severity="success" type="submit" className="right-pad" />
+                <Button label="Reset" icon="pi pi-refresh" severity="warning" type="reset" className="right-pad" />
                 <Button label="Cancel" icon="pi pi-times" severity="secondary" outlined type="button" onClick={cancel} />
             </div>
         </form>

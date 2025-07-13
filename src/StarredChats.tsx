@@ -44,15 +44,15 @@ export default function StarredChats(props: StarredChatProps) {
     }
 
     return <Dialog header="Starred chats" visible={props.show} onHide={() => props.setShow(false)} dismissableMask>
-        <div style={{ textAlign: "center" }}>
-            <Button label="Jump to top" icon="pi pi-arrow-up" style={{ marginRight: "5px" }} onClick={() => scrollToIdx(0)} />
+        <div className="text-center">
+            <Button label="Jump to top" icon="pi pi-arrow-up" className="right-pad" onClick={() => scrollToIdx(0)} />
             <Button label="Jump to bottom" icon="pi pi-arrow-down" onClick={() => scrollToIdx(props.totalNumberMessages - 1)} />
         </div>
         {props.starredMessages.length === 0 ? null
             :
             props.starredMessages.map(m =>
                 <div style={{ marginTop: "10px", cursor: "pointer" }} onClick={() => scrollToIdx(m.idx)}>
-                    <Chat message={m} systemMessageWidth={"45vw"} />
+                    <Chat message={m} systemMessageWidth={"45vw"} showPreview={false} />
                     <Divider />
                 </div>)
         }

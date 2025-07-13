@@ -112,7 +112,7 @@ export default function Search(props: SearchProps) {
 
     return <Dialog header="Search" visible={props.show} onHide={hide} dismissableMask style={{ width: "50vw" }}>
         <form style={{ textAlign: "center", marginTop: "5px", marginBottom: "15px" }} onSubmit={doSearch}>
-            <InputText id="search" placeholder="Search" style={{ marginRight: "5px" }} type="search" />
+            <InputText id="search" placeholder="Search" className="right-pad" type="search" />
             <Button type="submit" label="Search" icon="pi pi-search" />
         </form>
         {foundIdxes == null ?
@@ -143,6 +143,7 @@ export default function Search(props: SearchProps) {
                                                 message={props.messages[foundIdxes[index]]}
                                                 onContentChange={measure}
                                                 showAvatar={false}
+                                                showPreview={false}
                                                 systemMessageWidth={"45vw"}
                                             />
                                             <Divider />

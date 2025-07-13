@@ -113,11 +113,11 @@ export default function ChatView(props: ChatViewProps) {
                                     continue;
                                 }
                                 else {
-                                    loaded_messages.push(new MediaMessage(r.timestamp, r.sender, c.media_type, c.path, c.caption, loaded_messages.length - 1, r.idx, r.starred))
+                                    loaded_messages.push(new MediaMessage(r.timestamp, r.sender, c.media_type, c.path, c.caption, loaded_messages.length, r.idx, r.starred))
                                 }
                             }
                             else {
-                                loaded_messages.push(new MediaMessage(r.timestamp, r.sender, c.media_type, c.path, c.caption, loaded_messages.length - 1, r.idx, r.starred))
+                                loaded_messages.push(new MediaMessage(r.timestamp, r.sender, c.media_type, c.path, c.caption, loaded_messages.length, r.idx, r.starred))
                             }
                         }
                         else {

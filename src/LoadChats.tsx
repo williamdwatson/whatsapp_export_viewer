@@ -245,7 +245,7 @@ export function LoadChats(props: LoadChatsProps) {
     /**
      * Chat selection table footer
      */
-    const footer = <div style={{ textAlign: "center" }}>
+    const footer = <div className="text-center">
         <Button label="Add chat" icon="pi pi-plus" onClick={() => setShowChooseChat(true)} />
     </div>
 
@@ -267,16 +267,16 @@ export function LoadChats(props: LoadChatsProps) {
             <ConfirmDialog />
             <Dialog header={`${editingChat == null ? "Choose" : "Edit"} chat`} visible={showChooseChat} onHide={cancelChooseChat} dismissableMask>
                 <form onSubmit={editingChat == null ? addChat : doEditChat}>
-                    <div style={{ display: "flex", alignItems: "center" }}>
+                    <div className="flex-align-center">
                         <Button type="button" label="Choose chat" icon="pi pi-file" onClick={chooseChat} />
                         <span style={{ marginLeft: "10px" }}>{getBasename(selectedFilePath)}</span>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", marginTop: "15px" }}>
+                    <div className="flex-align-center" style={{ marginTop: "15px" }}>
                         <Button type="button" label="Choose directory" icon="pi pi-folder" onClick={chooseDirectory} />
                         <span style={{ marginLeft: "10px" }}>{selectedDirectoryPath}</span>
                     </div>
                     <div style={{ marginTop: "15px" }}>
-                        <label htmlFor="chat_name" style={{ marginRight: "5px" }}>Chat name:</label>
+                        <label htmlFor="chat_name" className="right-pad">Chat name:</label>
                         <InputText value={selectedChatName} onChange={e => setSelectedChatName(e.target.value)} id="chat_name" />
                     </div>
                     <div style={{ textAlign: "center", marginTop: "15px" }}>
@@ -298,7 +298,7 @@ export function LoadChats(props: LoadChatsProps) {
                         <Column body={chatControls} />
                     </DataTable>
                     <div style={{ textAlign: "center", marginTop: "15px" }}>
-                        <Button label="Load" icon="pi pi-arrow-right" severity="success" disabled={selectedFiles.length === 0} loading={loading} onClick={load} style={{ marginRight: "5px" }} />
+                        <Button label="Load" icon="pi pi-arrow-right" severity="success" disabled={selectedFiles.length === 0} loading={loading} onClick={load} className="right-pad" />
                         <Button label="Settings" icon="pi pi-cog" onClick={() => setShowSettings(true)} />
                     </div>
                 </div>

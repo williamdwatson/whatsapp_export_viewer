@@ -54,7 +54,7 @@ interface SystemChatProps {
 function SystemChat(props: SystemChatProps) {
     return <div>
         <Card style={{ width: props.width, display: "inline-block", textAlign: "center" }}>
-            <i style={{ margin: 0 }}>
+            <i className="zero-margin">
                 {props.highlightText == null ?
                     props.message.content
                     : <HighlightText highlight={props.highlightText}>{props.message.content}</HighlightText>
@@ -93,16 +93,16 @@ interface TextChatProps {
  */
 function TextChat(props: TextChatProps) {
     return <div style={{ float: props.fromYou ? "right" : undefined }}>
-        {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
+        {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="right-pad" /> : null}
         <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)}>
-            <p style={{ margin: 0 }}>
+            <p className="zero-margin">
                 {props.highlightText == null ?
                     <AutoLink text={props.message.content} />
                     : <HighlightText highlight={props.highlightText}>{props.message.content}</HighlightText>
                 }
             </p>
         </Card>
-        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px", marginRight: "5px", color: "var(--surface-section)", backgroundColor: "var(--primary-color)" }} /> : null}
+        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="you-avatar" /> : null}
     </div>
 }
 
@@ -129,6 +129,10 @@ interface MediaChatProps {
      */
     showAvatar: boolean,
     /**
+     * Whether to show the larger image popup
+     */
+    showPreview: boolean;
+    /**
      * Whether the message is from you (puts the avatar on the right side and changes the background color)
      * @default false
      */
@@ -142,10 +146,10 @@ function MediaChat(props: MediaChatProps) {
     let element: ReactNode;
     if (props.message.content.media_type === "PHOTO") {
         element = props.message.content.path == null ? <i>Photo unavailable</i>
-            : <Image onLoad={props.onContentChange} imageStyle={{ maxHeight: "20vh", maxWidth: "45vh" }} src={convertFileSrc(props.message.content.path)} preview />
+            : <Image onLoad={props.onContentChange} imageStyle={{ maxHeight: "20vh", maxWidth: "45vh" }} src={convertFileSrc(props.message.content.path)} preview={props.showPreview} />
     }
     else if (props.message.content.media_type === "VIDEO") {
-        element = props.message.content.path == null ? <i>Video unavailable</i> : <video style={{ maxHeight: "20vh", maxWidth: "45vh" }} controls src={convertFileSrc(props.message.content.path)} onLoad={props.onContentChange} />
+        element = props.message.content.path == null ? <i>Video unavailable</i> : <video style={{ maxHeight: "20vh", maxWidth: "45vh" }} controls={props.showPreview} src={convertFileSrc(props.message.content.path)} onLoad={props.onContentChange} />
     }
     else if (props.message.content.media_type === "AUDIO") {
         element = props.message.content.path == null ? <i>Audio unavailable</i> : <audio controls src={convertFileSrc(props.message.content.path)} />
@@ -163,11 +167,11 @@ function MediaChat(props: MediaChatProps) {
         }
     }
     return <div style={{ float: props.fromYou ? "right" : undefined }}>
-        {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
+        {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="right-pad" /> : null}
         <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)}>
             {element}
             {props.message.content.caption == null ? null :
-                <p style={{ margin: 0 }}>
+                <p className="zero-margin">
                     {props.highlightText == null ?
                         <AutoLink text={props.message.content.caption} />
                         : <HighlightText highlight={props.highlightText}>{props.message.content.caption}</HighlightText>
@@ -175,7 +179,7 @@ function MediaChat(props: MediaChatProps) {
                 </p>
             }
         </Card>
-        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px", marginRight: "5px", color: "var(--surface-section)", backgroundColor: "var(--primary-color)" }} /> : null}
+        {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="you-avatar" /> : null}
     </div>
 }
 
@@ -240,7 +244,7 @@ function BulkMediaChat(props: BulkMediaChatProps) {
     return <>
         <Dialog header={props.message.sender} visible={showMedia} onHide={() => setShowMedia(false)} maximized>
             {props.message.content.map(c => {
-                return <div style={{ textAlign: "center" }} key={`popup-media-${c.path}`}>
+                return <div className="text-center" key={`popup-media-${c.path}`}>
                     <b style={{ display: "block", marginBottom: "5px" }}>{c.timestamp.toLocaleString()}</b>
                     {c.path == null || c.path === "" ? <i>File unavailable</i> : c.media_type === "PHOTO" ?
                         <Image imageStyle={{ maxHeight: "40vh", maxWidth: "85vh" }} src={convertFileSrc(c.path)} preview />
@@ -252,7 +256,7 @@ function BulkMediaChat(props: BulkMediaChatProps) {
             })}
         </Dialog>
         <div style={{ float: props.fromYou ? "right" : undefined }}>
-            {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginRight: "5px" }} /> : null}
+            {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="right-pad" /> : null}
             <Card style={{ width: undefined, display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)}>
                 <div className="bulk-region" onClick={() => setShowMedia(true)}>
                     <div style={{ display: "inline-block" }}>
@@ -271,7 +275,7 @@ function BulkMediaChat(props: BulkMediaChatProps) {
                     </div>
                 </div>
             </Card>
-            {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" style={{ marginLeft: "5px", marginRight: "5px", color: "var(--surface-section)", backgroundColor: "var(--primary-color)" }} /> : null}
+            {props.showAvatar && props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="you-avatar" /> : null}
         </div>
     </>
 }
@@ -300,6 +304,11 @@ interface ChatProps {
      */
     showAvatar?: boolean,
     /**
+     * Whether to allow the larger version popup for an image
+     * @default true
+     */
+    showPreview?: boolean;
+    /**
      * Width of a system message
      */
     systemMessageWidth: CSSProperties["width"],
@@ -315,7 +324,7 @@ export default function Chat(props: ChatProps) {
         return <TextChat message={props.message as TextMessage} starMessage={props.starMessage} showAvatar={showAvatar} fromYou={props.fromYou} highlightText={props.highlightText} />
     }
     else if (props.message instanceof MediaMessage) {
-        return <MediaChat onContentChange={props.onContentChange} message={props.message as MediaMessage} starMessage={props.starMessage} showAvatar={showAvatar} fromYou={props.fromYou} highlightText={props.highlightText} />
+        return <MediaChat onContentChange={props.onContentChange} message={props.message as MediaMessage} starMessage={props.starMessage} showAvatar={showAvatar} showPreview={props.showPreview ?? true} fromYou={props.fromYou} highlightText={props.highlightText} />
     }
     else if (props.message instanceof BulkMediaMessage) {
         return <BulkMediaChat onContentChange={props.onContentChange} message={props.message as BulkMediaMessage} starMessage={props.starMessage} showAvatar={showAvatar} fromYou={props.fromYou} />

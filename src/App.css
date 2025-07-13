@@ -7,6 +7,39 @@
     padding: 0;
 }
 
+.right-pad {
+    margin-right: 5px;
+}
+
+.you-avatar {
+    margin-left: "5px";
+    margin-right: "5px";
+    color: var(--surface-section);
+    background-color: var(--primary-color);
+}
+
+.zero-margin {
+    margin: 0;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.highlighted-text {
+    background-color: goldenrod;
+}
+
+.flex-align-center {
+    display: flex;
+    align-items: center;
+}
+
+.settings-form {
+    justify-content: center;
+    margin-top: 10px;
+}
+
 .overlay {
     position: absolute;
     opacity: 0;

@@ -33,6 +33,13 @@ function App() {
         invoke("set_theme", { theme: !globalSettings.lightMode ? "DARK" : "LIGHT" });
     }, [globalSettings]);
 
+    // Disable right-clicking per https://stackoverflow.com/a/11902867
+    // useEffect(() => {
+    //     document.addEventListener("contextmenu", function (e) {
+    //         e.preventDefault();
+    //     }, false);
+    // }, []);
+
     return (
         <>
             <Toast ref={toast} />
