@@ -168,7 +168,7 @@ function MediaChat(props: MediaChatProps) {
     }
     return <div style={{ float: props.fromYou ? "right" : undefined }}>
         {props.showAvatar && !props.fromYou ? <Avatar label={props.message.sender?.charAt(0)} shape="circle" size="large" className="right-pad" /> : null}
-        <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)}>
+        <Card style={{ width: undefined, maxWidth: "45vw", display: "inline-block", backgroundColor: props.fromYou ? "var(--highlight-bg)" : undefined }} title={getTitle(props.message, props.starMessage)} pt={{ title: { style: { marginBottom: "3px" } } }}>
             {element}
             {props.message.content.caption == null ? null :
                 <p className="zero-margin">

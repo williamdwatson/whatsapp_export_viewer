@@ -51,7 +51,7 @@ export default function StarredChats(props: StarredChatProps) {
         {props.starredMessages.length === 0 ? null
             :
             props.starredMessages.map(m =>
-                <div style={{ marginTop: "10px", cursor: "pointer" }} onClick={() => scrollToIdx(m.idx)}>
+                <div style={{ marginTop: "10px", cursor: "pointer" }} onClick={() => scrollToIdx(m.idx)} key={`starred-${m.idx}`}>
                     <Chat message={m} systemMessageWidth={"45vw"} showPreview={false} />
                     <Divider />
                 </div>)
