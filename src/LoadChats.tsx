@@ -279,7 +279,7 @@ export function LoadChats(props: LoadChatsProps) {
                         <label htmlFor="chat_name" className="right-pad">Chat name:</label>
                         <InputText value={selectedChatName} onChange={e => setSelectedChatName(e.target.value)} id="chat_name" />
                     </div>
-                    <div style={{ textAlign: "center", marginTop: "15px" }}>
+                    <div className="settings-form2">
                         {editingChat == null ?
                             <Button type="submit" label="Add chat" icon="pi pi-plus" severity="success" disabled={selectedFilePath.trim() === "" || selectedChatName.trim() === ""} />
                             : <Button type="submit" label="Edit chat" icon="pi pi-save" severity="success" disabled={selectedFilePath.trim() === "" || selectedChatName.trim() === ""} />
@@ -297,7 +297,7 @@ export function LoadChats(props: LoadChatsProps) {
                         <Column header="Chat name" field="name" body={row => row.name == null ? <i>None</i> : row.name} sortable />
                         <Column body={chatControls} />
                     </DataTable>
-                    <div style={{ textAlign: "center", marginTop: "15px" }}>
+                    <div className="settings-form2">
                         <Button label="Load" icon="pi pi-arrow-right" severity="success" disabled={selectedFiles.length === 0} loading={loading} onClick={load} className="right-pad" />
                         <Button label="Settings" icon="pi pi-cog" onClick={() => setShowSettings(true)} />
                     </div>

@@ -50,7 +50,7 @@ export default function AutoLink({ text }: { text: string }) {
                     return <><code key={`${hashed}-${word}`}>{word.substring(1, word.length - 2)}</code>.</>
                 }
                 else if (word.includes("\n")) {
-                    return <span style={{ whiteSpace: "pre-wrap" }} key={`${hashed}-${word}`}>{word}</span>
+                    return <span className="message-with-line-break" key={`${hashed}-${word}`}>{word}</span>
                 }
                 return word;
             })}

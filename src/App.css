@@ -40,6 +40,38 @@
     margin-top: 10px;
 }
 
+.settings-form2 {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.chat-title {
+    font-weight: normal;
+    font-size: smaller;
+    float: right;
+    margin-top: 3px;
+    margin-left: 5px;
+}
+
+.chat-star {
+    margin-left: 5px;
+    cursor: pointer;
+}
+
+.message-with-line-break {
+    white-space: pre-wrap;
+}
+
+.image-or-video {
+    max-height: 20vh;
+    max-width: 45vw;
+}
+
+.media-file-button {
+    margin-top: 5px;
+    max-width: 45vw;
+}
+
 .overlay {
     position: absolute;
     opacity: 0;

@@ -84,7 +84,7 @@ export function ChatSettings(props: ChatSettingsProps) {
                 <InputSwitch checked={lightMode} onChange={e => setLightMode(e.value)} className="right-pad" />
                 <span style={{ cursor: "pointer" }} aria-label="Light mode" onClick={() => setLightMode(true)}>Light</span>
             </div>
-            <div style={{ textAlign: "center", marginTop: "15px" }}>
+            <div className="settings-form2">
                 <Button label="Save" icon="pi pi-save" severity="success" type="submit" className="right-pad" />
                 <Button label="Reset" icon="pi pi-refresh" severity="warning" type="reset" className="right-pad" />
                 <Button label="Cancel" icon="pi pi-times" severity="secondary" outlined type="button" onClick={cancel} />
@@ -155,7 +155,7 @@ export function GlobalSettings(props: GlobalSettingsProps) {
                 <InputSwitch checked={lightMode} onChange={e => setLightMode(e.value)} className="right-pad" />
                 <span style={{ cursor: "pointer" }} aria-label="Light mode" onClick={() => setLightMode(true)}>Light</span>
             </div>
-            <div style={{ textAlign: "center", marginTop: "15px" }}>
+            <div className="settings-form2">
                 <Button label="Save" icon="pi pi-save" severity="success" type="submit" className="right-pad" />
                 <Button label="Reset" icon="pi pi-refresh" severity="warning" type="reset" className="right-pad" />
                 <Button label="Cancel" icon="pi pi-times" severity="secondary" outlined type="button" onClick={cancel} />

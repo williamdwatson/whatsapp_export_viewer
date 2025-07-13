@@ -21,9 +21,9 @@ import { Divider } from "primereact/divider";
 function getTitle(message: Message, starMessage?: (message: Message) => void) {
     return <>
         {message.sender}
-        <span style={{ fontWeight: "normal", fontSize: "smaller", float: "right", marginTop: "3px", marginLeft: "5px" }}>
+        <span className="chat-title">
             {message.timestamp.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
-            {starMessage == undefined ? null : <i className={`pi pi-star${message.starred ? "-fill" : ""}`} style={{ marginLeft: "5px", cursor: "pointer" }} onClick={() => starMessage(message)} />}
+            {starMessage == undefined ? null : <i className={`pi pi-star${message.starred ? "-fill" : ""} chat-star`} onClick={() => starMessage(message)} />}
         </span>
 
     </>
@@ -149,7 +149,7 @@ function MediaChat(props: MediaChatProps) {
             : <Image onLoad={props.onContentChange} imageStyle={{ maxHeight: "20vh", maxWidth: "45vh" }} src={convertFileSrc(props.message.content.path)} preview={props.showPreview} />
     }
     else if (props.message.content.media_type === "VIDEO") {
-        element = props.message.content.path == null ? <i>Video unavailable</i> : <video style={{ maxHeight: "20vh", maxWidth: "45vh" }} controls={props.showPreview} src={convertFileSrc(props.message.content.path)} onLoad={props.onContentChange} />
+        element = props.message.content.path == null ? <i>Video unavailable</i> : <video className="image-or-video" controls={props.showPreview} src={convertFileSrc(props.message.content.path)} onLoad={props.onContentChange} />
     }
     else if (props.message.content.media_type === "AUDIO") {
         element = props.message.content.path == null ? <i>Audio unavailable</i> : <audio controls src={convertFileSrc(props.message.content.path)} />
@@ -160,7 +160,7 @@ function MediaChat(props: MediaChatProps) {
             const icon = p.toLowerCase().endsWith("pdf") ? "pi-file-pdf"
                 : p.toLowerCase().endsWith("doc") || p.toLowerCase().endsWith("docx") ? "pi-file-word"
                     : p.toLowerCase().endsWith("xls") || p.toLowerCase().endsWith("xlsx") ? "pi-file-excel" : "pi-file";
-            element = <Button label={getBasename(p)} icon={`pi ${icon}`} style={{ marginTop: "5px", maxWidth: "45vw" }} onClick={() => { setLoadingFile(true); openPath(p).finally(() => setLoadingFile(false)) }} loading={loadingFile} />
+            element = <Button label={getBasename(p)} icon={`pi ${icon}`} className="media-file-button" onClick={() => { setLoadingFile(true); openPath(p).finally(() => setLoadingFile(false)) }} loading={loadingFile} />
         }
         else {
             element = <i>File unavailable</i>
